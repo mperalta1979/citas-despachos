@@ -1,0 +1,1236 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agenda de despachos</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#EDF0F4; --surface:#FFFFFF; --surface-2:#F5F7FA; --ink:#17212E; --ink-2:#56647A;
+  --line:#CFD7E2; --line-2:#E3E8EF;
+  --head:#D9E3F0; --head-ink:#1B3556;
+  --accent:#1F5FA8; --accent-ink:#FFFFFF; --accent-soft:#E3EDF8;
+  --ok-bg:#C2E3A8; --ok-ink:#1F4712; --na-bg:#E4F1D9; --na-ink:#3F6A2B;
+  --bad-bg:#FFC7CE; --bad-ink:#9C0006; --warn-bg:#FFE7A8; --warn-ink:#6B4A00;
+  --date-bg:#FFC000; --date-ink:#3B2A00; --late-bg:#F08A5D; --late-ink:#3A1200;
+  --clash-bg:#E4D5F5; --clash-ink:#4A2678;
+  --t-ready:#5FAE3F; --t-part:#D9A400; --t-risk:#D63F4F;
+  --shadow:0 8px 30px rgba(20,30,50,.22); --focus:#1F5FA8;
+  font-family:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10151C; --surface:#18202A; --surface-2:#1E2733; --ink:#E7ECF3; --ink-2:#9BA9BD;
+    --line:#2D3848; --line-2:#242E3B; --head:#22354E; --head-ink:#D3E3F8;
+    --accent:#6EA8E6; --accent-ink:#0B1826; --accent-soft:#1F3552;
+    --ok-bg:#2F5A22; --ok-ink:#D3F2BE; --na-bg:#25391F; --na-ink:#B4D7A0;
+    --bad-bg:#5C2530; --bad-ink:#FFC1C8; --warn-bg:#5A4712; --warn-ink:#FFE2A0;
+    --date-bg:#B98600; --date-ink:#FFFFFF; --late-bg:#A8482A; --late-ink:#FFFFFF;
+    --clash-bg:#3F2E5A; --clash-ink:#E3D3FA; --shadow:0 8px 30px rgba(0,0,0,.55); --focus:#8FBCEF;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10151C; --surface:#18202A; --surface-2:#1E2733; --ink:#E7ECF3; --ink-2:#9BA9BD;
+  --line:#2D3848; --line-2:#242E3B; --head:#22354E; --head-ink:#D3E3F8;
+  --accent:#6EA8E6; --accent-ink:#0B1826; --accent-soft:#1F3552;
+  --ok-bg:#2F5A22; --ok-ink:#D3F2BE; --na-bg:#25391F; --na-ink:#B4D7A0;
+  --bad-bg:#5C2530; --bad-ink:#FFC1C8; --warn-bg:#5A4712; --warn-ink:#FFE2A0;
+  --date-bg:#B98600; --date-ink:#FFFFFF; --late-bg:#A8482A; --late-ink:#FFFFFF;
+  --clash-bg:#3F2E5A; --clash-ink:#E3D3FA; --shadow:0 8px 30px rgba(0,0,0,.55); --focus:#8FBCEF;
+}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-size:13px;line-height:1.4}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.grow{flex:1}
+.muted{color:var(--ink-2)}
+button{font:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+#app{height:100%;display:flex;flex-direction:column;min-height:0}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+.top h1{font-size:17px;font-weight:600;margin:0 6px 0 0}
+.sync{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2);font-size:12px}
+.sync i{width:8px;height:8px;border-radius:50%;background:var(--ink-2)}
+.sync.ok i{background:var(--t-ready)} .sync.err i,.sync.off i{background:var(--t-risk)}
+.me{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2);font-size:12px}
+.me img{width:24px;height:24px;border-radius:50%}
+.role{font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);text-transform:uppercase;letter-spacing:.02em}
+.role.admin{background:var(--accent-soft);color:var(--accent)}
+.btn{height:32px;padding:0 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);cursor:pointer;font-weight:500}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--bad-ink);border-color:var(--bad-bg);background:var(--bad-bg)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--accent)}
+.btn.sm{height:26px;padding:0 9px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+.ib{width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:var(--ink-2);cursor:pointer;display:inline-grid;place-items:center;flex:none}
+.ib:hover{background:var(--accent-soft);color:var(--accent)}
+
+.banner{padding:8px 16px;background:var(--warn-bg);color:var(--warn-ink);border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner.err{background:var(--bad-bg);color:var(--bad-ink)}
+
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 16px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 11px;cursor:pointer;height:28px}
+.chip .n{margin-left:6px;font-weight:600;font-variant-numeric:tabular-nums}
+.chip .n.has{color:var(--bad-ink);background:var(--bad-bg);border-radius:999px;padding:0 6px}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chip[aria-pressed="true"] .n.has{background:rgba(255,255,255,.9);color:#9C0006}
+.chk{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2);cursor:pointer}
+.search{width:250px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{height:30px;padding:0 14px;border:0;background:var(--surface);color:var(--ink);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.weeknav{display:flex;align-items:center;gap:6px}
+.weeknav .lbl{font-weight:600;min-width:150px;text-align:center}
+.legend{color:var(--ink-2);font-size:12px}
+
+main{flex:1;min-height:0;overflow:auto;background:var(--surface)}
+
+#tbl{border-collapse:separate;border-spacing:0;table-layout:fixed}
+#tbl th,#tbl td{border-right:1px solid var(--line-2);border-bottom:1px solid var(--line-2);padding:0 8px;height:30px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;background:var(--surface)}
+#tbl thead th{position:sticky;background:var(--head);color:var(--head-ink);z-index:3;border-color:var(--line)}
+#tbl .r1 th{top:0;height:36px;font-size:11px;font-weight:600;line-height:1.15;white-space:normal;padding:2px 6px}
+#tbl .r2 th{top:36px;height:32px;padding:3px 4px}
+#tbl .c-act{position:sticky;left:0;z-index:2;background:var(--surface);padding:0 4px}
+#tbl thead .c-act{z-index:4;background:var(--head)}
+#tbl .lbl{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%;height:100%;display:flex;align-items:center}
+#tbl th[aria-sort="ascending"] .lbl::after{content:" ▲";font-size:9px;margin-left:3px}
+#tbl th[aria-sort="descending"] .lbl::after{content:" ▼";font-size:9px;margin-left:3px}
+.flt{width:100%;height:24px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink);font:inherit;font-size:12px;padding:0 5px}
+#tbl td.c-date,#tbl td.c-txt{font-variant-numeric:tabular-nums}
+#tbl td.c-date{text-align:center}
+#tbl tbody tr:hover td.c-txt,#tbl tbody tr:hover td.c-act,#tbl tbody tr:hover td.c-date:not(.d-soon):not(.d-late){background:var(--accent-soft)}
+#tbl tr.closed td.c-txt,#tbl tr.closed td.c-date{color:var(--ink-2)}
+.d-soon{background:var(--date-bg)!important;color:var(--date-ink)!important;font-weight:600}
+.d-late{background:var(--late-bg)!important;color:var(--late-ink)!important;font-weight:600}
+.st-ok{background:var(--ok-bg);color:var(--ok-ink)}
+.st-na{background:var(--na-bg);color:var(--na-ink)}
+.st-bad{background:var(--bad-bg);color:var(--bad-ink)}
+.st-warn{background:var(--warn-bg);color:var(--warn-ink)}
+.st-off{background:var(--surface-2);color:var(--ink-2)}
+#tbl td.st-ok{background:var(--ok-bg);color:var(--ok-ink)}
+#tbl td.st-na{background:var(--na-bg);color:var(--na-ink)}
+#tbl td.st-bad{background:var(--bad-bg);color:var(--bad-ink)}
+#tbl td.st-warn{background:var(--warn-bg);color:var(--warn-ink)}
+#tbl td.st-off{background:var(--surface-2);color:var(--ink-2)}
+#tbl td.st-empty{background:var(--surface)}
+#tbl td.c-sel{padding:0}
+.cellsel{width:100%;height:29px;border:0;background:transparent;color:inherit;font:inherit;font-weight:500;text-align:center;text-align-last:center;appearance:none;-webkit-appearance:none;cursor:pointer;padding:0 6px}
+.cellsel:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.cellsel:disabled{cursor:default;opacity:1}
+select option{background:var(--surface);color:var(--ink)}
+.actwrap{display:flex;align-items:center;gap:4px}
+.flag{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:4px;line-height:1.5;white-space:nowrap}
+.f-late{background:var(--late-bg);color:var(--late-ink)}
+.f-risk{background:var(--bad-bg);color:var(--bad-ink)}
+.f-clash{background:var(--clash-bg);color:var(--clash-ink)}
+.f-closed{background:var(--surface-2);color:var(--ink-2)}
+.emptymsg{position:sticky;left:16px;width:min(560px,86vw);padding:36px 0;white-space:normal;color:var(--ink-2)}
+#tbl td.emptycell{height:auto;border:0}
+
+#week{display:grid;grid-template-columns:repeat(7,minmax(200px,1fr));min-height:100%;min-width:1400px}
+.wday{border-right:1px solid var(--line-2);padding:0 8px 14px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.wday>header{position:sticky;top:0;background:inherit;padding:10px 2px 6px;display:flex;justify-content:space-between;font-weight:600;border-bottom:1px solid var(--line-2);z-index:1}
+.wday.today{background:var(--accent-soft)}
+.wday .dc{color:var(--ink-2);font-weight:500}
+.wempty{color:var(--ink-2);margin:6px 2px;font-size:12px}
+.wcard{display:flex;flex-direction:column;gap:2px;text-align:left;border:1px solid var(--line);border-left-width:5px;background:var(--surface);color:var(--ink);padding:7px 9px;border-radius:6px;cursor:pointer;width:100%}
+.wcard:hover{border-color:var(--accent)}
+.wcard .w1{display:flex;justify-content:space-between;gap:6px}
+.wcard .w1 span{color:var(--ink-2);font-size:12px}
+.wcard .w2{font-weight:600}
+.wcard .w3{color:var(--ink-2);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wcard .w4{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:3px;font-size:12px}
+.wcard .w5{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+.t-ready{border-left-color:var(--t-ready)} .t-part{border-left-color:var(--t-part)} .t-risk{border-left-color:var(--t-risk)} .t-closed{border-left-color:var(--line);opacity:.7}
+.dots{display:inline-flex;gap:3px}
+.dot{width:10px;height:10px;border-radius:2px;border:1px solid var(--ink-2);display:inline-block}
+.dot.st-empty{background:transparent;border-style:dashed}
+
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(10,18,30,.5);display:flex;align-items:flex-start;justify-content:center;padding:calc(env(safe-area-inset-top,0px) + 4vh) 12px calc(env(safe-area-inset-bottom,0px) + 12px);overflow:auto;z-index:50}
+.sheet{background:var(--surface);color:var(--ink);border-radius:10px;box-shadow:var(--shadow);width:min(780px,100%);display:flex;flex-direction:column}
+.sheet>header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)}
+.sheet h2{margin:0;font-size:16px;font-weight:600}
+.mbody{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.sheet>footer{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--line);background:var(--surface-2);border-radius:0 0 10px 10px}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px 12px}
+.f{grid-column:span 2;display:flex;flex-direction:column;gap:4px;min-width:0}
+.f.s3{grid-column:span 3} .f.s6{grid-column:span 6} .f.s4{grid-column:span 4}
+.fl{font-size:12px;font-weight:500;color:var(--ink-2)}
+.fh{font-size:11.5px;color:var(--ink-2)}
+.inp{width:100%;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit;padding:0 8px}
+textarea.inp{height:auto;min-height:64px;padding:6px 8px;resize:vertical}
+.inp.st-ok{background:var(--ok-bg);color:var(--ok-ink)} .inp.st-na{background:var(--na-bg);color:var(--na-ink)} .inp.st-bad{background:var(--bad-bg);color:var(--bad-ink)} .inp.st-warn{background:var(--warn-bg);color:var(--warn-ink)} .inp.st-off{background:var(--surface-2);color:var(--ink-2)}
+fieldset{border:1px solid var(--line);border-radius:8px;margin:0;padding:10px 12px 12px}
+legend{padding:0 6px;font-weight:600}
+.hint{border-radius:6px;padding:8px 10px;font-weight:500}
+.hint.ok{background:var(--ok-bg);color:var(--ok-ink)} .hint.bad{background:var(--bad-bg);color:var(--bad-ink)} .hint.warn{background:var(--warn-bg);color:var(--warn-ink)} .hint.clash{background:var(--clash-bg);color:var(--clash-ink)}
+.hint+.hint{margin-top:6px}
+.err-msg{color:var(--bad-ink);background:var(--bad-bg);padding:6px 10px;border-radius:6px}
+details.hist summary{cursor:pointer;font-weight:500}
+details.hist ul{margin:8px 0 0;padding-left:18px;color:var(--ink-2);font-size:12px}
+details.hist li{margin:3px 0}
+.was{text-decoration:line-through}
+.mrow{display:grid;grid-template-columns:200px 1fr 28px;gap:8px;align-items:start;margin-bottom:8px}
+.mtools{display:flex;gap:8px;flex-wrap:wrap}
+.prev{display:grid;grid-template-columns:auto 1fr;gap:4px 14px}
+.prev b{font-variant-numeric:tabular-nums}
+
+.sheet.login{width:min(420px,100%);margin-top:8vh}
+.me .av{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:inline-grid;place-items:center;font-weight:600;font-size:12px}
+.urow{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line-2);flex-wrap:wrap}
+.urow .uinfo{flex:1;min-width:120px}
+.urow .un{font-weight:500}
+.urow .btns{display:flex;gap:6px;flex-wrap:wrap}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);background:var(--ink);color:var(--surface);padding:9px 16px;border-radius:8px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;max-width:90vw}
+#toast.show{opacity:1}
+#toast.err{background:var(--bad-ink);color:#fff}
+
+@media (max-width:640px){
+  .f,.f.s3,.f.s4{grid-column:span 6}
+  .mrow{grid-template-columns:1fr 28px} .mrow .m-d{grid-column:1/-1;grid-row:2}
+  .search{width:100%}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <h1>Agenda de despachos</h1>
+    <span class="sync" id="sync" role="status"><i></i><span id="syncTxt">Conectando…</span></span>
+    <span class="grow"></span>
+    <button type="button" class="btn" id="btnMaster">Clientes y destinos</button>
+    <button type="button" class="btn" id="btnUsuarios" hidden>Usuarios y roles</button>
+    <button type="button" class="btn" id="btnImport">Importar Excel</button>
+    <button type="button" class="btn" id="btnExport">Exportar Excel</button>
+    <button type="button" class="btn primary" id="btnNew">Nueva cita</button>
+    <span class="me" id="me"></span>
+    <button type="button" class="btn ghost" id="btnOut" hidden>Cerrar sesión</button>
+    <input type="file" id="fileIn" accept=".xlsx,.xlsm,.xls,.csv" hidden>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <div class="toolbar">
+    <div class="chips" id="chips" role="group" aria-label="Filtros rápidos"></div>
+    <label class="chk"><input type="checkbox" id="chkClosed"> Ver cerradas</label>
+    <input type="search" class="inp search" id="search" placeholder="Buscar cliente, OC, NV, cita…" aria-label="Buscar">
+    <button type="button" class="btn ghost" id="btnClear" hidden>Limpiar filtros</button>
+    <span class="grow"></span>
+    <div class="weeknav" id="weeknav" hidden>
+      <button type="button" class="btn" id="wPrev" aria-label="Semana anterior">‹</button>
+      <span class="lbl" id="wkLabel"></span>
+      <button type="button" class="btn" id="wNext" aria-label="Semana siguiente">›</button>
+      <button type="button" class="btn" id="wToday">Hoy</button>
+      <span class="legend">Cuadros: NV en despacho · Palletizado</span>
+    </div>
+    <div class="seg" role="group" aria-label="Vista">
+      <button type="button" id="vTabla" aria-pressed="true">Tabla</button>
+      <button type="button" id="vSemana" aria-pressed="false">Semana</button>
+    </div>
+  </div>
+  <main id="main">
+    <table id="tbl"></table>
+    <div id="week" hidden></div>
+  </main>
+</div>
+
+<div class="overlay" id="login" hidden>
+  <form class="sheet login" id="loginForm" aria-labelledby="lTitle">
+    <header><h2 id="lTitle">Agenda de despachos</h2></header>
+    <div class="mbody">
+      <p class="muted" style="margin:0">Elige tu nombre e ingresa tu clave.</p>
+      <label class="f"><span class="fl">Usuario</span><select class="inp" id="lUser" required></select></label>
+      <label class="f"><span class="fl">Contraseña</span><input class="inp" type="password" id="lPass" autocomplete="current-password" required></label>
+      <div id="lErr" class="err-msg" hidden></div>
+      <p class="fh" style="margin:0">¿Olvidaste tu clave? Pide a un administrador que te la restablezca desde "Usuarios y roles".</p>
+    </div>
+    <footer><span class="grow"></span><button type="submit" class="btn primary" id="lBtn">Ingresar</button></footer>
+  </form>
+</div>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <header><h2 id="mTitle"></h2><button type="button" class="ib" id="mClose" aria-label="Cerrar">✕</button></header>
+    <div class="mbody" id="mBody"></div>
+    <footer id="mFoot"></footer>
+  </div>
+</div>
+<datalist id="dl-cli"></datalist>
+<datalist id="dl-dir"></datalist>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ============ CONFIGURACIÓN (edita esta sección) ============
+   Firebase Console → ⚙ Configuración del proyecto → tus apps → app web → "Config". */
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyC8FlG5pTCQArNoHDEJpRy3PkcbC0V86SY',
+  authDomain: 'citas-petroflex-1.firebaseapp.com',
+  projectId: 'citas-petroflex-1',
+  storageBucket: 'citas-petroflex-1.firebasestorage.app',
+  messagingSenderId: '438252258797',
+  appId: '1:438252258797:web:19d31eb7483c0da0ebd3e4',
+};
+
+/* Igual de simple que tus otras apps (Post Venta, Control de Negocios): un
+   solo archivo HTML, sin terminal, sin Node, sin CLI. Firebase solo guarda
+   los datos (Firestore) y da una "credencial anónima" para que las reglas de
+   seguridad funcionen; el usuario y clave de cada persona son propios de la
+   app (guardados en Firestore, con la clave cifrada con SHA-256, nunca en
+   texto plano) — el mismo patrón que ya usas en tus otras apps. */
+
+/* ============ utilidades ============ */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+const nrm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const nrmU = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+const slug = s => nrm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 120) || 'cliente';
+const clip = v => String(v ?? '').slice(0, 200);
+const isoOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const todayISO = () => isoOf(new Date());
+const parseISO = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const daysFrom = (a, b) => Math.round((parseISO(b) - parseISO(a)) / 86400000);
+const isISO = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
+const fmtDate = s => isISO(s) ? `${s.slice(8)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : (s || '');
+const millisOf = t => (t && typeof t.toMillis === 'function') ? t.toMillis() : (t && typeof t.seconds === 'number' ? t.seconds * 1000 : (t ? +new Date(t) : NaN));
+const fmtTS = t => { const d = new Date(millisOf(t)); return isNaN(d) ? '' : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const shortName = n => n || 'sistema';
+const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const ROLES = ['admin', 'editor', 'lector'];
+const ROLE_LABEL = {admin:'Administrador', editor:'Editor', lector:'Lector'};
+async function sha256hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/* ============ modelo ============ */
+const COLS = [
+  {k:'estado',   h:'ESTADO', type:'select', opts:['PENDIENTE','DESPACHADA','REPROGRAMADA','CANCELADA'], w:120},
+  {k:'cliente',  h:'CLIENTE', type:'text', w:130},
+  {k:'oc',       h:'OC', type:'text', w:150},
+  {k:'nv',       h:'NV', type:'text', w:150},
+  {k:'fechaNV',  h:'FECHA NV', type:'date', w:94},
+  {k:'nroCita',  h:'Nº CITA', type:'text', w:92},
+  {k:'fechaCita',h:'FECHA CITA', type:'date', w:106},
+  {k:'horaCita', h:'HORA CITA', type:'time', w:80},
+  {k:'direccion',h:'DIRECCIÓN DE DESPACHO', type:'text', w:300},
+  {k:'nvRecep',  h:'NV RECEP. EN DESPACHO', type:'select', opts:['','SI','NO','N/A'], w:132},
+  {k:'pallet',   h:'PALLETIZADO Y ETIQUETADO', type:'select', opts:['','PREPARADO','EN PREPARACIÓN','N/A'], w:170},
+  {k:'pallets',  h:'PALLETS Y BULTOS', type:'text', w:160},
+  {k:'conforme', h:'RECIBIDA', type:'select', opts:['','SI','NO'], w:110},
+  {k:'obs',      h:'OBSERVACIONES', type:'text', w:260},
+];
+const ACT_W = 140;
+const FIELDS = COLS.map(c => c.k);
+const LABEL = Object.fromEntries(COLS.map(c => [c.k, c.h.charAt(0) + c.h.slice(1).toLowerCase()]));
+const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', nvRecep:'', pallet:'', pallets:'', conforme:'', obs:''});
+const fromDoc = snap => ({...blank(), ...snap.data(), id:snap.id});
+const CHECK = [
+  {k:'nvRecep', label:'NV recepcionada en despacho', risk:'NV sin recepcionar en despacho (no se podría despachar a tiempo)'},
+  {k:'pallet',  label:'Palletizado y etiquetado',    risk:'Palletizado y etiquetado pendiente'},
+];
+const isOk = v => v === 'SI' || v === 'PREPARADO' || v === 'N/A';
+const RISK_DAYS = 2; // días de anticipación para marcar "en riesgo" y pintar la fecha
+const FLAGTXT = {late:'Atrasada', risk:'En riesgo', clash:'Choque'};
+
+function stCls(k, v) {
+  if (!v) return 'st-empty';
+  if (v === 'SI' || v === 'PREPARADO') return 'st-ok';
+  if (v === 'N/A') return 'st-na';
+  return 'st-bad';
+}
+function estadoCls(v) {
+  return v === 'PENDIENTE' ? 'st-bad' : v === 'DESPACHADA' ? 'st-ok' : v === 'REPROGRAMADA' ? 'st-warn' : 'st-off';
+}
+
+/* ============ estado de la app ============ */
+let CITAS = [], MASTER = [], USUARIOS = [];
+const AN = new Map();
+let VIEW = 'tabla', QUICK = 'todas', SHOWCLOSED = false, SEARCH = '', F = {}, SORT = {k:'fechaCita', dir:1}, WEEK = 0;
+let auth = null, db = null;
+let SESION = null, NOMBRE = '', UID = '', ROLE = '', CANWRITE = false, ISADMIN = false;
+let STARTED = false, LOADED = false, BANNER = '', USUARIOS_LISTOS = false;
+let LASTDAY = todayISO(), deferred = false, M = null, lastFocus = null;
+let timers = {}, unsubs = [];
+
+/* ============ análisis de cada cita ============ */
+const slotKey = c => (c.estado === 'PENDIENTE' && c.fechaCita && c.horaCita && c.direccion)
+  ? [c.fechaCita, c.horaCita, nrm(c.direccion)].join('|') : null;
+
+function analyzeOne(c, othersAtSlot) {
+  const a = {flags:[], reasons:[], days:null, pending:CHECK.filter(x => !isOk(c[x.k])), ready:false};
+  a.ready = !a.pending.length;
+  if (isISO(c.fechaCita)) a.days = daysFrom(todayISO(), c.fechaCita);
+  if (c.estado === 'PENDIENTE') {
+    if (a.days !== null && a.days < 0) {
+      a.flags.push('late');
+      a.reasons.push(`Fecha vencida hace ${-a.days} ${-a.days === 1 ? 'día' : 'días'} y sigue pendiente`);
+    }
+    if (a.days !== null && a.days >= 0 && a.days <= RISK_DAYS && !a.ready) {
+      a.flags.push('risk');
+      a.pending.forEach(p => a.reasons.push(p.risk));
+    }
+    if (othersAtSlot > 0) {
+      a.flags.push('clash');
+      a.reasons.push('Otra cita pendiente en el mismo destino, día y hora');
+    }
+  }
+  return a;
+}
+function slotCounts(exceptId) {
+  const s = {};
+  CITAS.forEach(c => { if (c.id === exceptId) return; const k = slotKey(c); if (k) s[k] = (s[k] || 0) + 1; });
+  return s;
+}
+function computeAnalysis() {
+  AN.clear();
+  const s = slotCounts(null);
+  CITAS.forEach(c => { const k = slotKey(c); AN.set(c.id, analyzeOne(c, k ? s[k] - 1 : 0)); });
+}
+
+/* ============ filtros, orden, listas ============ */
+function matchF(c) {
+  for (const cl of COLS) {
+    const f = F[cl.k]; if (!f) continue;
+    const val = c[cl.k] ?? '';
+    if (cl.type === 'select') {
+      if (f === '__empty') { if (val) return false; } else if (val !== f) return false;
+    } else {
+      const shown = cl.type === 'date' ? `${fmtDate(val)} ${val}` : String(val);
+      if (!nrm(shown).includes(nrm(f))) return false;
+    }
+  }
+  return true;
+}
+function quickOK(c, a) {
+  const p = c.estado === 'PENDIENTE';
+  switch (QUICK) {
+    case 'late': return p && a.flags.includes('late');
+    case 'hoy': return p && a.days === 0;
+    case 'manana': return p && a.days === 1;
+    case 'risk': return p && a.flags.includes('risk');
+    case 'clash': return p && a.flags.includes('clash');
+    default: return true;
+  }
+}
+function sortList(list) {
+  const {k, dir} = SORT;
+  const cmp = (x, y) => String(x ?? '').localeCompare(String(y ?? ''), 'es', {numeric:true, sensitivity:'base'});
+  return list.sort((a, b) => {
+    let r = 0;
+    if (k === 'fechaCita') { r = (a.fechaCita || '9999').localeCompare(b.fechaCita || '9999') || (a.horaCita || '99:99').localeCompare(b.horaCita || '99:99'); }
+    else if (k === 'horaCita') { r = (a.horaCita || '99:99').localeCompare(b.horaCita || '99:99'); }
+    else r = cmp(a[k], b[k]);
+    if (!r) r = (a.fechaCita || '').localeCompare(b.fechaCita || '') || (a.horaCita || '').localeCompare(b.horaCita || '') || cmp(a.cliente, b.cliente);
+    return r * dir;
+  });
+}
+function visibleList() {
+  const q = nrm(SEARCH);
+  const list = CITAS.filter(c => {
+    if (!SHOWCLOSED && !F.estado && c.estado !== 'PENDIENTE') return false;
+    if (!quickOK(c, AN.get(c.id))) return false;
+    if (q && !nrm([c.cliente, c.oc, c.nv, c.nroCita, c.direccion, c.obs, c.pallets].join(' ')).includes(q)) return false;
+    return matchF(c);
+  });
+  return sortList(list);
+}
+
+/* ============ render: tabla ============ */
+function buildHead() {
+  const cg = `<colgroup><col style="width:${ACT_W}px">${COLS.map(c => `<col style="width:${c.w}px">`).join('')}</colgroup>`;
+  const r1 = `<tr class="r1"><th class="c-act" scope="col"><span class="sr">Acciones</span></th>${COLS.map(c =>
+    `<th scope="col" data-k="${c.k}" aria-sort="none"><button type="button" class="lbl" data-sort="${c.k}">${esc(c.h)}</button></th>`).join('')}</tr>`;
+  const ctl = c => c.type === 'select'
+    ? `<select class="flt" data-fk="${c.k}" aria-label="Filtrar ${esc(c.h)}"><option value="">(todos)</option><option value="__empty">(vacío)</option>${c.opts.filter(Boolean).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}</select>`
+    : `<input class="flt" data-fk="${c.k}" placeholder="filtrar" aria-label="Filtrar ${esc(c.h)}">`;
+  const r2 = `<tr class="r2"><th class="c-act"></th>${COLS.map(c => `<th>${ctl(c)}</th>`).join('')}</tr>`;
+  const tbl = $('#tbl');
+  tbl.style.width = (ACT_W + COLS.reduce((s, c) => s + c.w, 0)) + 'px';
+  tbl.innerHTML = `${cg}<thead>${r1}${r2}</thead><tbody id="tbody"></tbody>`;
+}
+function selectHTML(id, cl, v) {
+  const o = (cl.opts.includes(v) || v === '') ? cl.opts : [...cl.opts, v];
+  return `<select class="cellsel" data-id="${esc(id)}" data-k="${cl.k}" aria-label="${esc(cl.h)}"${CANWRITE ? '' : ' disabled'}>${o.map(x => `<option value="${esc(x)}"${x === v ? ' selected' : ''}>${x === '' ? '—' : esc(x)}</option>`).join('')}</select>`;
+}
+function flagsHTML(a) {
+  const t = esc(a.reasons.join(' · '));
+  return a.flags.map(f => `<span class="flag f-${f}" title="${t}">${FLAGTXT[f]}</span>`).join('');
+}
+function rowHTML(c) {
+  const a = AN.get(c.id), closed = c.estado !== 'PENDIENTE';
+  let dcls = '';
+  if (!closed && a.days !== null) dcls = a.days < 0 ? 'd-late' : a.days <= RISK_DAYS ? 'd-soon' : '';
+  const tds = COLS.map(cl => {
+    const v = c[cl.k] ?? '';
+    if (cl.type === 'select') return `<td class="c-sel ${cl.k === 'estado' ? estadoCls(v) : stCls(cl.k, v)}">${selectHTML(c.id, cl, v)}</td>`;
+    if (cl.type === 'date') return `<td class="c-date ${cl.k === 'fechaCita' ? dcls : ''}" title="${esc(fmtDate(v))}">${esc(fmtDate(v))}</td>`;
+    return `<td class="c-txt" title="${esc(v)}">${esc(v)}</td>`;
+  }).join('');
+  return `<tr data-id="${esc(c.id)}"${closed ? ' class="closed"' : ''}><td class="c-act"><div class="actwrap"><button type="button" class="ib" data-act="edit" aria-label="Editar cita de ${esc(c.cliente)}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>${flagsHTML(a)}</div></td>${tds}</tr>`;
+}
+function emptyMsg() {
+  if (!SESION) return 'Inicia sesión para ver las citas.';
+  if (!LOADED) return 'Cargando citas…';
+  if (!CITAS.length) return 'Aún no hay citas. Crea la primera con <b>Nueva cita</b> o importa tu planilla con <b>Importar Excel</b>.';
+  return 'Ninguna cita coincide con los filtros. Prueba con <b>Limpiar filtros</b> o activa <b>Ver cerradas</b>.';
+}
+function renderTable(list) {
+  $('#tbody').innerHTML = list.length
+    ? list.map(rowHTML).join('')
+    : `<tr><td class="emptycell" colspan="${COLS.length + 1}"><div class="emptymsg">${emptyMsg()}</div></td></tr>`;
+  $$('#tbl th[data-k]').forEach(th => th.setAttribute('aria-sort', th.dataset.k === SORT.k ? (SORT.dir > 0 ? 'ascending' : 'descending') : 'none'));
+}
+
+/* ============ render: semana ============ */
+function mondayOf(iso) { const d = parseISO(iso); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; }
+function cardHTML(c) {
+  const a = AN.get(c.id), closed = c.estado !== 'PENDIENTE';
+  const tone = closed ? 'closed' : (a.flags.includes('late') || a.flags.includes('risk')) ? 'risk' : a.ready ? 'ready' : 'part';
+  const dots = CHECK.map(x => `<i class="dot ${stCls(x.k, c[x.k])}" title="${esc(x.label)}: ${esc(c[x.k] || 'sin dato')}"></i>`).join('');
+  const nro = c.nroCita && c.nroCita !== 'S/N' ? 'Cita ' + c.nroCita : '';
+  return `<button type="button" class="wcard t-${tone}" data-id="${esc(c.id)}"><span class="w1"><b>${esc(c.horaCita || 's/h')}</b><span>${esc(nro)}</span></span><span class="w2">${esc(c.cliente)}</span><span class="w3">${esc(c.direccion)}</span><span class="w4"><span class="dots">${dots}</span><span>${esc(c.pallets)}</span></span>${(a.flags.length || closed) ? `<span class="w5">${flagsHTML(a)}${closed ? `<span class="flag f-closed">${esc(c.estado)}</span>` : ''}</span>` : ''}</button>`;
+}
+function renderWeek(list) {
+  const mon = mondayOf(todayISO()); mon.setDate(mon.getDate() + WEEK * 7);
+  const days = [...Array(7)].map((_, i) => { const d = new Date(mon); d.setDate(d.getDate() + i); return d; });
+  const by = {}; list.forEach(c => { if (c.fechaCita) (by[c.fechaCita] ||= []).push(c); });
+  const t = todayISO();
+  $('#wkLabel').textContent = `${days[0].getDate()} ${MES[days[0].getMonth()]} – ${days[6].getDate()} ${MES[days[6].getMonth()]} ${days[6].getFullYear()}`;
+  $('#week').innerHTML = days.map(d => {
+    const iso = isoOf(d);
+    const items = (by[iso] || []).sort((x, y) => (x.horaCita || '99').localeCompare(y.horaCita || '99'));
+    return `<section class="wday${iso === t ? ' today' : ''}" aria-label="${DIAS[d.getDay()]} ${d.getDate()}"><header><span>${DIAS[d.getDay()]} ${d.getDate()}</span><span class="dc">${items.length || ''}</span></header>${items.map(cardHTML).join('') || '<p class="wempty">Sin citas</p>'}</section>`;
+  }).join('');
+}
+
+/* ============ chips, banner, render general ============ */
+const CHIPDEF = [['todas','Todas'],['late','Atrasadas'],['hoy','Hoy'],['manana','Mañana'],['risk','En riesgo'],['clash','Choques']];
+function buildChips() {
+  $('#chips').innerHTML = CHIPDEF.map(([k, l]) => `<button type="button" class="chip" data-q="${k}" aria-pressed="${k === QUICK}">${l}<span class="n">0</span></button>`).join('');
+}
+function updateChips() {
+  const pend = CITAS.filter(c => c.estado === 'PENDIENTE');
+  const cnt = {todas: SHOWCLOSED ? CITAS.length : pend.length, late:0, hoy:0, manana:0, risk:0, clash:0};
+  pend.forEach(c => {
+    const a = AN.get(c.id);
+    if (a.flags.includes('late')) cnt.late++;
+    if (a.days === 0) cnt.hoy++;
+    if (a.days === 1) cnt.manana++;
+    if (a.flags.includes('risk')) cnt.risk++;
+    if (a.flags.includes('clash')) cnt.clash++;
+  });
+  $$('#chips .chip').forEach(b => {
+    const k = b.dataset.q, n = $('.n', b);
+    n.textContent = cnt[k];
+    n.className = 'n' + (['late', 'risk', 'clash'].includes(k) && cnt[k] ? ' has' : '');
+    b.setAttribute('aria-pressed', String(k === QUICK));
+  });
+}
+function renderBanner() {
+  const b = $('#banner');
+  if (BANNER) { b.hidden = false; b.className = 'banner err'; b.textContent = BANNER; } else b.hidden = true;
+}
+function renderAll(force) {
+  const ae = document.activeElement;
+  if (!force && ae && ae.classList && ae.classList.contains('cellsel')) { deferred = true; return; }
+  deferred = false;
+  computeAnalysis(); updateChips(); renderBanner();
+  const list = visibleList();
+  $('#btnClear').hidden = !(Object.values(F).some(Boolean) || SEARCH || QUICK !== 'todas');
+  if (VIEW === 'tabla') renderTable(list); else renderWeek(list);
+}
+function setView(v) {
+  VIEW = v;
+  $('#vTabla').setAttribute('aria-pressed', String(v === 'tabla'));
+  $('#vSemana').setAttribute('aria-pressed', String(v === 'semana'));
+  $('#tbl').hidden = v !== 'tabla'; $('#week').hidden = v !== 'semana'; $('#weeknav').hidden = v !== 'semana';
+  renderAll(true);
+}
+
+/* ============ feedback ============ */
+function toast(msg, kind) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'show ' + (kind || '');
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.className = ''; }, 3800);
+}
+function errMsg(e) {
+  const code = String((e && e.code) || '');
+  const m = String((e && e.message) || e || '');
+  if (/network|unavailable/i.test(code) || /failed to fetch|networkerror|load failed/i.test(m)) return 'Sin conexión a internet. Reintenta en unos segundos.';
+  if (code === 'permission-denied' || /permission/i.test(m)) return 'No tienes permiso para esta acción.';
+  return 'No se pudo completar la acción: ' + m.slice(0, 140);
+}
+function setSync(state, msg) {
+  const el = $('#sync'); el.className = 'sync ' + state;
+  $('#syncTxt').textContent = msg || ({ok:'Sincronizado', wait:'Conectando…', off:'Sin conexión', err:'Error de conexión'}[state]);
+}
+
+/* ============ avisos: NTFY (mandados directo desde el navegador) ============ */
+async function ntfyEnviar(titulo, mensaje, tags = [], prioridad = 3) {
+  try {
+    const snap = await db.collection('config').doc('ntfy').get();
+    if (!snap.exists) return;
+    const cfg = snap.data();
+    if (!cfg.topic) return; // sin tema configurado, no hay a quién avisar
+    const url = cfg.url || 'https://ntfy.sh';
+    // Publicar en JSON exige POST a la URL raíz, nunca a la URL del tema.
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({topic: cfg.topic, title: titulo, message: mensaje, tags, priority: prioridad}),
+    });
+    if (!res.ok) console.warn('NTFY respondió', res.status);
+  } catch (e) {
+    console.warn('No se pudo avisar a NTFY', e);
+  }
+}
+
+/* ============ datos: Firestore en tiempo real ============ */
+function startData() {
+  setSync('wait');
+  unsubs.push(db.collection('citas').orderBy('fechaCita').onSnapshot(snap => {
+    CITAS = snap.docs.map(fromDoc); LOADED = true; setSync('ok'); syncDatalists(); renderAll();
+  }, err => { setSync('err'); if (!LOADED) { BANNER = errMsg(err); renderAll(true); } }));
+  unsubs.push(db.collection('clientesDestinos').onSnapshot(snap => {
+    MASTER = snap.docs.map(d => ({n: d.data().cliente || d.id, d: d.data().destinos || []})).sort((a, b) => a.n.localeCompare(b.n, 'es'));
+    syncDatalists();
+  }, () => {}));
+  timers.day = setInterval(() => { if (todayISO() !== LASTDAY) { LASTDAY = todayISO(); renderAll(); } }, 60000);
+}
+function stopData() {
+  unsubs.forEach(u => u()); unsubs = [];
+  clearInterval(timers.day);
+  CITAS = []; MASTER = []; LOADED = false; STARTED = false;
+  renderAll(true);
+}
+
+/* ============ datos: escritura ============ */
+async function patchCita(id, patch) {
+  let notif = null;
+  await db.runTransaction(async tx => {
+    const ref = db.collection('citas').doc(id);
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error('La cita ya no existe: puede que otra persona la haya eliminado.');
+    const cur = snap.data();
+    const now = Date.now(), entries = [];
+    for (const k of Object.keys(patch)) {
+      const before = cur[k] ?? '';
+      if (before !== patch[k]) entries.push({t: now, u: NOMBRE, f: k, a: clip(before), b: clip(patch[k])});
+    }
+    if (!entries.length) { notif = null; return; }
+    const log = [...(cur.log || []), ...entries].slice(-40);
+    // Solo avisamos al pasar a "SI" (no en cada guardado posterior).
+    notif = (cur.conforme !== 'SI' && patch.conforme === 'SI')
+      ? {...cur, ...patch, modificadoPor: NOMBRE} : null;
+    tx.update(ref, {...patch, log, modificadoPor: NOMBRE, modificadoEn: firebase.firestore.FieldValue.serverTimestamp()});
+  });
+  if (notif) {
+    ntfyEnviar(
+      'Cita entregada conforme: ' + (notif.cliente || '(sin cliente)'),
+      [
+        `${fmtDate(notif.fechaCita)} ${notif.horaCita || 's/h'}`,
+        notif.direccion || '',
+        `NV: ${notif.nv || '—'} · OC: ${notif.oc || '—'}`,
+        notif.pallets ? `Pallets y bultos: ${notif.pallets}` : '',
+        `Confirmada por ${shortName(notif.modificadoPor)}`,
+      ].filter(Boolean).join('\n'),
+      ['white_check_mark'], 3
+    ).catch(() => {});
+  }
+}
+async function createCita(d) {
+  await db.collection('citas').add({
+    ...d, origen:'app', log:[{t:Date.now(), u:NOMBRE, f:'_creada'}],
+    creadoPor:NOMBRE, creadoEn:firebase.firestore.FieldValue.serverTimestamp(), modificadoPor:NOMBRE, modificadoEn:firebase.firestore.FieldValue.serverTimestamp(),
+  });
+  learnMaster([d]).catch(() => {});
+  ntfyEnviar(
+    'Nueva cita: ' + (d.cliente || '(sin cliente)'),
+    [
+      `${fmtDate(d.fechaCita)} ${d.horaCita || 's/h'}`,
+      d.direccion || '',
+      `NV: ${d.nv || '—'} · OC: ${d.oc || '—'}`,
+      `Ingresada por ${shortName(NOMBRE)}`,
+    ].filter(Boolean).join('\n'),
+    ['calendar'], 3
+  ).catch(() => {});
+}
+async function removeCita(id) {
+  await db.collection('citas').doc(id).delete();
+}
+async function learnMaster(rows) {
+  const byKey = new Map(MASTER.map(x => [nrm(x.n), {n:x.n, d:[...x.d]}])), touched = new Set();
+  rows.forEach(r => {
+    const n = (r.cliente || '').trim(); if (!n) return;
+    const key = nrm(n); let it = byKey.get(key);
+    if (!it) { it = {n, d:[]}; byKey.set(key, it); touched.add(key); }
+    const dir = (r.direccion || '').trim();
+    if (dir && !it.d.some(x => nrm(x) === nrm(dir))) { it.d.push(dir); touched.add(key); }
+  });
+  if (!touched.size) return;
+  const batch = db.batch();
+  touched.forEach(key => { const it = byKey.get(key); batch.set(db.collection('clientesDestinos').doc(slug(it.n)), {cliente:it.n, destinos:it.d}); });
+  await batch.commit();
+}
+
+/* ============ modal: base ============ */
+function openSheet(title, body, foot) {
+  lastFocus = document.activeElement;
+  $('#mTitle').textContent = title; $('#mBody').innerHTML = body; $('#mFoot').innerHTML = foot;
+  $('#overlay').hidden = false;
+  const f = $('#mBody input:not([type=hidden]), #mBody select, #mBody textarea, #mFoot button');
+  if (f) f.focus();
+}
+function closeModal() {
+  $('#overlay').hidden = true; M = null;
+  if (lastFocus && lastFocus.focus && document.contains(lastFocus)) lastFocus.focus();
+}
+function showErr(msg) {
+  let e = $('#mErr'); if (!e) { e = document.createElement('div'); e.id = 'mErr'; e.className = 'err-msg'; $('#mBody').prepend(e); }
+  e.textContent = msg; e.scrollIntoView({block:'nearest'});
+}
+
+/* ============ modal: cita ============ */
+const inp = (f, v, extra = '') => `<input class="inp" data-f="${f}" value="${esc(v)}" ${extra}>`;
+const sel = (f, opts, v) => { const o = (opts.includes(v) || v === '') ? opts : [...opts, v]; return `<select class="inp" data-f="${f}">${o.map(x => `<option value="${esc(x)}"${x === v ? ' selected' : ''}>${x === '' ? '—' : esc(x)}</option>`).join('')}</select>`; };
+const optsOf = k => COLS.find(c => c.k === k).opts;
+function histHTML(c) {
+  const log = (c.log || []).slice().reverse();
+  if (!log.length) return '';
+  return `<details class="hist"><summary>Historial de cambios (${log.length})</summary><ul>${log.map(e => {
+    const who = esc(shortName(e.u));
+    if (e.f === '_creada') return `<li>${fmtTS(e.t)} · <b>${who}</b> creó la cita</li>`;
+    const lab = (LABEL[e.f] || e.f).toLowerCase();
+    return `<li>${fmtTS(e.t)} · <b>${who}</b> cambió ${esc(lab)}: <span class="was">${esc(isISO(e.a) ? fmtDate(e.a) : (e.a || '—'))}</span> → ${esc(isISO(e.b) ? fmtDate(e.b) : (e.b || '—'))}</li>`;
+  }).join('')}</ul></details>`;
+}
+function openCita(id, preset) {
+  const c = id ? CITAS.find(x => x.id === id) : null;
+  if (id && !c) return;
+  const v = Object.assign(blank(), c || {}, preset || {});
+  M = {kind:'cita', id, orig:c};
+  const body = `
+    <div class="grid">
+      <label class="f"><span class="fl">Estado</span>${sel('estado', optsOf('estado'), v.estado)}</label>
+      <label class="f s3"><span class="fl">Cliente</span>${inp('cliente', v.cliente, 'list="dl-cli" autocomplete="off"')}</label>
+      <label class="f"><span class="fl">Nº de cita</span>${inp('nroCita', v.nroCita, 'placeholder="S/N si no aplica"')}</label>
+      <label class="f"><span class="fl">Fecha de la cita</span>${inp('fechaCita', v.fechaCita, 'type="date"')}</label>
+      <label class="f"><span class="fl">Hora</span>${inp('horaCita', v.horaCita, 'type="time"')}</label>
+      <label class="f"><span class="fl">Fecha NV</span>${inp('fechaNV', v.fechaNV, 'type="date"')}</label>
+      <label class="f s6"><span class="fl">Dirección de despacho</span>${inp('direccion', v.direccion, 'list="dl-dir" autocomplete="off" placeholder="Elige un destino del cliente o escribe uno nuevo"')}</label>
+      <label class="f s3"><span class="fl">OC</span>${inp('oc', v.oc, 'placeholder="Varias separadas por ;"')}</label>
+      <label class="f s3"><span class="fl">NV</span>${inp('nv', v.nv, 'placeholder="Varias separadas por ;"')}</label>
+    </div>
+    <fieldset><legend>Preparación del despacho</legend>
+      <div class="grid">
+        <label class="f s3"><span class="fl">NV recepcionada en despacho</span>${sel('nvRecep', optsOf('nvRecep'), v.nvRecep)}<span class="fh">¿La NV ya llegó a despacho para poder despacharla a tiempo?</span></label>
+        <label class="f s3"><span class="fl">Palletizado y etiquetado</span>${sel('pallet', optsOf('pallet'), v.pallet)}</label>
+      </div>
+      <div id="hint" style="margin-top:10px"></div>
+    </fieldset>
+    <div class="grid">
+      <label class="f s3"><span class="fl">Pallets y bultos</span>${inp('pallets', v.pallets, 'placeholder="Ej: 22 pallets + 28 bultos"')}</label>
+      <label class="f s3"><span class="fl">Recibida</span>${sel('conforme', optsOf('conforme'), v.conforme)}<span class="fh">Al pasar a SI se avisa por NTFY que la cita fue entregada conforme.</span></label>
+      <label class="f s6"><span class="fl">Observaciones</span><textarea class="inp" data-f="obs" rows="2">${esc(v.obs)}</textarea></label>
+    </div>
+    ${c ? histHTML(c) : ''}
+    ${c ? `<div class="fh">Última modificación: <b>${esc(shortName(c.modificadoPor))}</b> · ${fmtTS(c.modificadoEn)}</div>` : ''}`;
+  const foot = `
+    ${id ? `<span id="delWrap"><button type="button" class="btn" id="mDel"${CANWRITE ? '' : ' disabled'}>Eliminar</button></span><span id="delAsk" hidden>¿Eliminar esta cita? <button type="button" class="btn danger" id="mDelYes">Sí, eliminar</button> <button type="button" class="btn" id="mDelNo">No</button></span>` : ''}
+    ${id ? '<button type="button" class="btn" id="mDup">Duplicar</button>' : ''}
+    <span class="grow"></span>
+    <button type="button" class="btn" id="mCancel">Cancelar</button>
+    <button type="button" class="btn primary" id="mSave"${CANWRITE ? '' : ' disabled'}>${id ? 'Guardar cambios' : 'Crear cita'}</button>`;
+  openSheet(id ? 'Editar cita' : 'Nueva cita', body, foot);
+  fillDirList($('[data-f=cliente]').value);
+  colorSelects(); updateHint();
+}
+function readForm() {
+  const d = {};
+  FIELDS.forEach(k => { const el = $(`#mBody [data-f="${k}"]`); d[k] = el ? el.value.trim() : ''; });
+  return d;
+}
+function colorSelects() {
+  $$('#mBody select.inp').forEach(s => {
+    const k = s.dataset.f;
+    s.classList.remove('st-ok', 'st-na', 'st-bad', 'st-warn', 'st-off', 'st-empty');
+    if (k === 'estado') s.classList.add(estadoCls(s.value));
+    else if (['nvRecep', 'pallet', 'conforme'].includes(k) && s.value) s.classList.add(stCls(k, s.value));
+  });
+}
+function updateHint() {
+  const h = $('#hint'); if (!h || !M || M.kind !== 'cita') return;
+  const d = readForm(), s = slotCounts(M.id), k = slotKey(d);
+  const a = analyzeOne(d, k ? (s[k] || 0) : 0);
+  const out = [];
+  if (d.estado !== 'PENDIENTE') out.push(`<div class="hint warn">Cita en estado ${esc(d.estado)}: no genera alertas.</div>`);
+  else {
+    if (a.ready) out.push('<div class="hint ok">Lista para despachar: el checklist está completo.</div>');
+    else out.push(`<div class="hint ${a.days !== null && a.days <= RISK_DAYS ? 'bad' : 'warn'}">Falta: ${a.pending.map(p => esc(p.risk)).join(' · ')}</div>`);
+    if (a.flags.includes('late')) out.push(`<div class="hint bad">${esc(a.reasons.find(r => r.startsWith('Fecha vencida')))}</div>`);
+    if (a.flags.includes('clash')) out.push('<div class="hint clash">Hay otra cita pendiente en el mismo destino, día y hora.</div>');
+  }
+  h.innerHTML = out.join('');
+}
+function fillDirList(cliente) {
+  const n = nrm(cliente), set = new Set();
+  const m = MASTER.find(x => nrm(x.n) === n);
+  if (m) (m.d || []).forEach(x => set.add(x));
+  CITAS.forEach(c => { if (c.direccion && nrm(c.cliente) === n) set.add(c.direccion); });
+  if (!set.size) { MASTER.forEach(x => (x.d || []).forEach(y => set.add(y))); CITAS.forEach(c => c.direccion && set.add(c.direccion)); }
+  $('#dl-dir').innerHTML = [...set].sort().map(x => `<option value="${esc(x)}">`).join('');
+}
+function syncDatalists() {
+  const set = new Set(MASTER.map(x => x.n));
+  CITAS.forEach(c => c.cliente && set.add(c.cliente));
+  $('#dl-cli').innerHTML = [...set].sort((a, b) => a.localeCompare(b, 'es')).map(x => `<option value="${esc(x)}">`).join('');
+}
+async function saveCita() {
+  const d = readForm();
+  if (!d.cliente) return showErr('Indica el cliente.');
+  if (!isISO(d.fechaCita)) return showErr('Indica la fecha de la cita.');
+  const btn = $('#mSave'); btn.disabled = true;
+  try {
+    if (M.id) {
+      const patch = {}; FIELDS.forEach(k => { if ((M.orig[k] ?? '') !== d[k]) patch[k] = d[k]; });
+      if (Object.keys(patch).length) await patchCita(M.id, patch);
+      learnMaster([d]).catch(() => {});
+    } else await createCita(d);
+    closeModal(); toast('Cita guardada');
+  } catch (e) { showErr(errMsg(e)); btn.disabled = false; }
+}
+async function deleteCita() {
+  try { await removeCita(M.id); closeModal(); toast('Cita eliminada'); }
+  catch (e) { showErr(errMsg(e)); }
+}
+
+/* ============ modal: clientes y destinos ============ */
+const mrow = x => `<div class="mrow"><input class="inp m-n" placeholder="Cliente" value="${esc(x.n)}" aria-label="Cliente"><textarea class="inp m-d" rows="2" placeholder="Un destino por línea" aria-label="Destinos">${esc((x.d || []).join('\n'))}</textarea><button type="button" class="ib m-x" aria-label="Quitar cliente">✕</button></div>`;
+function readMaster() {
+  const by = new Map();
+  $$('.mrow').forEach(r => {
+    const n = $('.m-n', r).value.trim(); if (!n) return;
+    const d = $('.m-d', r).value.split('\n').map(s => s.trim()).filter(Boolean);
+    const key = nrm(n), it = by.get(key);
+    if (it) d.forEach(x => { if (!it.d.includes(x)) it.d.push(x); }); else by.set(key, {n, d:[...new Set(d)]});
+  });
+  return [...by.values()];
+}
+function openMaster() {
+  M = {kind:'master'};
+  const rows = MASTER.length ? MASTER : [{n:'', d:[]}];
+  openSheet('Clientes y destinos',
+    `<p class="muted" style="margin:0">Cada cliente con sus destinos de despacho. Al crear una cita los eliges de una lista en vez de escribirlos.</p><div id="mrows">${rows.map(mrow).join('')}</div><div class="mtools"><button type="button" class="btn" id="mAdd"${CANWRITE ? '' : ' disabled'}>Agregar cliente</button><button type="button" class="btn" id="mFill">Traer desde las citas</button></div>`,
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="mSaveM"${CANWRITE ? '' : ' disabled'}>Guardar</button>`);
+}
+function mergeFromCitas() {
+  const items = readMaster();
+  CITAS.forEach(c => {
+    const n = (c.cliente || '').trim(); if (!n) return;
+    let it = items.find(x => nrm(x.n) === nrm(n)); if (!it) { it = {n, d:[]}; items.push(it); }
+    const dir = (c.direccion || '').trim();
+    if (dir && !it.d.some(x => nrm(x) === nrm(dir))) it.d.push(dir);
+  });
+  items.sort((a, b) => a.n.localeCompare(b.n, 'es'));
+  $('#mrows').innerHTML = items.map(mrow).join('');
+}
+async function saveMaster() {
+  const items = readMaster(), keepKeys = new Set(items.map(x => nrm(x.n)));
+  try {
+    const batch = db.batch();
+    items.forEach(x => batch.set(db.collection('clientesDestinos').doc(slug(x.n)), {cliente:x.n, destinos:x.d}));
+    MASTER.forEach(x => { if (!keepKeys.has(nrm(x.n))) batch.delete(db.collection('clientesDestinos').doc(slug(x.n))); });
+    await batch.commit();
+    closeModal(); toast('Clientes y destinos guardados');
+  } catch (e) { showErr(errMsg(e)); }
+}
+
+/* ============ modal: usuarios y roles (solo administradores) ============ */
+const roleSelectHTML = (uid, r) => `<select class="inp usel" data-uid="${esc(uid)}">${ROLES.map(x => `<option value="${x}"${x === r ? ' selected' : ''}>${ROLE_LABEL[x]}</option>`).join('')}</select>`;
+function usuarioRowHTML(u) {
+  return `<div class="urow">
+    <div class="uinfo"><div class="un">${esc(u.nombre)}</div></div>
+    ${roleSelectHTML(u.id, u.rol)}
+    <div class="btns">
+      <button type="button" class="btn sm" data-act="ureset" data-uid="${esc(u.id)}">Restablecer clave</button>
+      <button type="button" class="btn sm" data-act="uborrar" data-uid="${esc(u.id)}"${u.id === UID ? ' disabled title="No puedes quitarte el acceso a ti mismo"' : ''}>Quitar acceso</button>
+    </div>
+  </div>`;
+}
+function refreshUsuariosList() {
+  const box = $('#uList'); if (!box) return;
+  box.innerHTML = USUARIOS.map(usuarioRowHTML).join('') || '<p class="muted">Aún no hay usuarios.</p>';
+}
+async function loadNtfyConfig() {
+  try { const s = await db.collection('config').doc('ntfy').get(); return s.exists ? s.data() : {}; }
+  catch (e) { return {}; }
+}
+function openUsuarios() {
+  M = {kind:'usuarios'};
+  openSheet('Usuarios y roles',
+    `<div id="uList"></div>
+     <fieldset><legend>Agregar usuario</legend>
+       <div class="grid">
+         <label class="f s3"><span class="fl">Nombre</span><input class="inp" id="uNombre" autocomplete="off"></label>
+         <label class="f s3"><span class="fl">Contraseña</span><input class="inp" type="text" id="uPass" placeholder="Mínimo 4 caracteres"></label>
+         <label class="f s3"><span class="fl">Rol</span><select class="inp" id="uRol">${ROLES.map(r => `<option value="${r}">${ROLE_LABEL[r]}</option>`).join('')}</select></label>
+       </div>
+       <p class="fh" style="margin:8px 0 0">Admin: todo, incluido este panel. Editor: crea y edita citas. Lector: solo puede ver. Avísale a la persona su nombre y clave; para cambiarla, un administrador usa "Restablecer clave" en su fila.</p>
+     </fieldset>
+     <fieldset><legend>Notificaciones (NTFY)</legend>
+       <div class="grid">
+         <label class="f s3"><span class="fl">Tema (topic)</span><input class="inp" id="nTopic" autocomplete="off" placeholder="ej: petroflex-despachos-x7q2m"></label>
+         <label class="f s3"><span class="fl">Servidor</span><input class="inp" id="nUrl" autocomplete="off" placeholder="https://ntfy.sh"></label>
+       </div>
+       <p class="fh" style="margin:8px 0 0">Elige un tema largo y difícil de adivinar (cualquiera que lo sepa puede suscribirse). Suscríbete a él en la app de NTFY para recibir los avisos de nueva cita y cita entregada conforme.</p>
+       <div style="margin-top:8px"><button type="button" class="btn" id="nSave"${ISADMIN ? '' : ' disabled'}>Guardar</button></div>
+     </fieldset>`,
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cerrar</button><button type="button" class="btn primary" id="uAdd"${ISADMIN ? '' : ' disabled'}>Crear usuario</button>`);
+  refreshUsuariosList();
+  loadNtfyConfig().then(cfg => { $('#nTopic').value = cfg.topic || ''; $('#nUrl').value = cfg.url || ''; });
+}
+async function crearUsuarioForm() {
+  const nombre = $('#uNombre').value.trim(), password = $('#uPass').value, rol = $('#uRol').value;
+  if (!nombre) return toast('Indica el nombre.', 'err');
+  if (password.length < 4) return toast('La contraseña debe tener al menos 4 caracteres.', 'err');
+  if (USUARIOS.some(u => nrm(u.nombre) === nrm(nombre))) return toast('Ya existe un usuario con ese nombre.', 'err');
+  const btn = $('#uAdd'); btn.disabled = true;
+  try {
+    const claveHash = await sha256hex(password);
+    let id = slug(nombre); if (USUARIOS.some(u => u.id === id)) id += '-' + Date.now().toString(36).slice(-4);
+    await db.collection('usuarios').doc(id).set({
+      nombre, claveHash, rol, creadoEn: firebase.firestore.FieldValue.serverTimestamp(), creadoPor: NOMBRE,
+    });
+    $('#uNombre').value = ''; $('#uPass').value = '';
+    toast('Usuario creado');
+  } catch (e) { showErr(errMsg(e)); } finally { btn.disabled = false; }
+}
+async function cambiarRolForm(uid, rol) {
+  try { await db.collection('usuarios').doc(uid).update({rol}); toast('Rol actualizado'); }
+  catch (e) { toast(errMsg(e), 'err'); refreshUsuariosList(); }
+}
+async function restablecerClaveForm(uid) {
+  const u = USUARIOS.find(x => x.id === uid); if (!u) return;
+  const nueva = prompt(`Nueva clave para ${u.nombre} (mínimo 4 caracteres):`);
+  if (nueva == null) return;
+  if (nueva.length < 4) return toast('La contraseña debe tener al menos 4 caracteres.', 'err');
+  try {
+    const claveHash = await sha256hex(nueva);
+    await db.collection('usuarios').doc(uid).update({claveHash});
+    toast('Clave actualizada');
+  } catch (e) { toast(errMsg(e), 'err'); }
+}
+async function eliminarUsuarioForm(uid) {
+  const u = USUARIOS.find(x => x.id === uid); if (!u) return;
+  if (u.rol === 'admin' && USUARIOS.filter(x => x.rol === 'admin').length <= 1) {
+    return toast('No puedes quitar al único administrador. Crea otro admin primero.', 'err');
+  }
+  if (!confirm(`¿Quitar el acceso de ${u.nombre}? Ya no podrá ver ni editar nada en la app.`)) return;
+  try { await db.collection('usuarios').doc(uid).delete(); toast('Acceso eliminado'); }
+  catch (e) { toast(errMsg(e), 'err'); }
+}
+async function guardarNtfyForm() {
+  const topic = $('#nTopic').value.trim(), url = $('#nUrl').value.trim() || 'https://ntfy.sh';
+  const btn = $('#nSave'); btn.disabled = true;
+  try { await db.collection('config').doc('ntfy').set({topic, url}); toast('Configuración de NTFY guardada'); }
+  catch (e) { toast(errMsg(e), 'err'); } finally { btn.disabled = false; }
+}
+
+/* ============ importar / exportar Excel ============ */
+function headerKey(h) {
+  if (h === 'ESTADO') return 'estado';
+  if (h === 'CLIENTE') return 'cliente';
+  if (h === 'OC') return 'oc';
+  if (h === 'NV') return 'nv';
+  if (h.startsWith('FECHA NV')) return 'fechaNV';
+  if (/^(NRO |N |NUM |NUMERO )?CITA$/.test(h)) return 'nroCita';
+  if (h.startsWith('FECHA C')) return 'fechaCita';
+  if (h.startsWith('HORA')) return 'horaCita';
+  if (h.includes('DIRECCION')) return 'direccion';
+  if (h.includes('RECEP')) return 'nvRecep';
+  if (h.includes('PALLETIZADO')) return 'pallet';
+  if (h.includes('BULTOS') || h.startsWith('PALLETS')) return 'pallets';
+  if (h.includes('RECIBIDA') || h.includes('CONFORME')) return 'conforme';
+  if (h.startsWith('OBSERV')) return 'obs';
+  return null;
+}
+function toISODate(v) {
+  if (v == null || v === '') return '';
+  if (v instanceof Date) return isoOf(v);
+  if (typeof v === 'number') { const d = new Date(Math.round((v - 25569) * 86400000)); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`; }
+  const s = String(v).trim(); let m;
+  if ((m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/))) { let y = +m[3]; if (y < 100) y += 2000; return `${y}-${pad(+m[2])}-${pad(+m[1])}`; }
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})/))) return `${m[1]}-${m[2]}-${m[3]}`;
+  return '';
+}
+function toHHMM(v) {
+  if (v === '' || v == null) return '';
+  if (typeof v === 'number') { const mins = Math.round((v % 1) * 1440); return `${pad(Math.floor(mins / 60) % 24)}:${pad(mins % 60)}`; }
+  const m = String(v).match(/(\d{1,2})[:.hH](\d{2})/);
+  return m ? `${pad(+m[1])}:${m[2]}` : '';
+}
+function cleanStatus(v) {
+  const s = nrmU(v); if (!s) return '';
+  if (s === 'SI') return 'SI';
+  if (s === 'NO') return 'NO';
+  if (s === 'N A' || s === 'NA') return 'N/A';
+  if (s.startsWith('EN PREPARACION')) return 'EN PREPARACIÓN';
+  if (s === 'PREPARADO' || s === 'PENDIENTE' || s === 'DESPACHADA' || s === 'REPROGRAMADA' || s === 'CANCELADA') return s;
+  return String(v).trim();
+}
+function importParse(buf) {
+  if (typeof XLSX === 'undefined') throw new Error('No se cargó el lector de Excel. Revisa tu conexión y recarga la página.');
+  const wb = XLSX.read(buf, {type:'array'});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
+  const hi = rows.findIndex(r => r.some(x => nrmU(x) === 'CLIENTE') && r.some(x => nrmU(x) === 'NV'));
+  if (hi < 0) throw new Error('No encontré la fila de encabezados. Necesito al menos las columnas CLIENTE y NV.');
+  const map = {};
+  rows[hi].forEach((h, i) => { const k = headerKey(nrmU(h)); if (k && !(k in map)) map[k] = i; });
+  const existing = new Set(CITAS.map(c => [c.cliente, c.nv, c.fechaCita, c.horaCita].map(nrm).join('|')));
+  const out = [], seen = new Set(); let dup = 0, nodate = 0, total = 0;
+  rows.slice(hi + 1).forEach(r => {
+    const g = k => (k in map ? r[map[k]] : '');
+    const cliente = String(g('cliente') ?? '').trim(), nv = String(g('nv') ?? '').trim();
+    if (!cliente && !nv) return;
+    total++;
+    const c = blank();
+    c.cliente = cliente; c.nv = nv;
+    c.oc = String(g('oc') ?? '').trim();
+    c.nroCita = String(g('nroCita') ?? '').trim();
+    c.direccion = String(g('direccion') ?? '').trim();
+    c.pallets = String(g('pallets') ?? '').trim();
+    c.obs = String(g('obs') ?? '').trim();
+    c.fechaNV = toISODate(g('fechaNV')); c.fechaCita = toISODate(g('fechaCita')); c.horaCita = toHHMM(g('horaCita'));
+    ['estado', 'nvRecep', 'pallet', 'conforme'].forEach(k => { c[k] = cleanStatus(g(k)); });
+    if (!c.estado) c.estado = 'PENDIENTE';
+    const key = [c.cliente, c.nv, c.fechaCita, c.horaCita].map(nrm).join('|');
+    if (existing.has(key) || seen.has(key)) { dup++; return; }
+    seen.add(key);
+    if (!c.fechaCita) nodate++;
+    out.push(c);
+  });
+  return {rows:out, dup, nodate, total, missing:['cliente', 'nv', 'fechaCita', 'direccion'].filter(k => !(k in map))};
+}
+function openImportPreview(name, res) {
+  M = {kind:'import', res};
+  const warn = res.missing.length ? `<div class="hint warn">No encontré estas columnas: ${res.missing.join(', ')}. Se importarán vacías.</div>` : '';
+  openSheet('Importar desde Excel',
+    `<div class="prev"><span class="muted">Archivo</span><b>${esc(name)}</b><span class="muted">Filas leídas</span><b>${res.total}</b><span class="muted">Citas nuevas</span><b>${res.rows.length}</b><span class="muted">Ya existentes (se omiten)</span><b>${res.dup}</b><span class="muted">Sin fecha de cita</span><b>${res.nodate}</b></div>${warn}<p class="muted" style="margin:0" id="impMsg">Se considera repetida una fila con el mismo cliente, NV, fecha y hora. Al importar no se envía un aviso por cada cita: llega un solo resumen a NTFY.</p>`,
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="mImport"${(res.rows.length && CANWRITE) ? '' : ' disabled'}>Importar ${res.rows.length} citas</button>`);
+}
+async function runImport() {
+  const rows = M.res.rows, btn = $('#mImport'), msg = $('#impMsg'); btn.disabled = true;
+  let n = 0;
+  try {
+    for (let i = 0; i < rows.length; i += 400) {
+      const chunk = rows.slice(i, i + 400), batch = db.batch();
+      chunk.forEach(r => {
+        const ref = db.collection('citas').doc();
+        batch.set(ref, {...r, origen:'importacion', log:[{t:Date.now(), u:NOMBRE, f:'_creada'}], creadoPor:NOMBRE, creadoEn:firebase.firestore.FieldValue.serverTimestamp(), modificadoPor:NOMBRE, modificadoEn:firebase.firestore.FieldValue.serverTimestamp()});
+      });
+      await batch.commit();
+      n += chunk.length; msg.textContent = `Importando ${n} de ${rows.length}…`;
+    }
+    await learnMaster(rows).catch(() => {});
+    if (n > 0) {
+      ntfyEnviar('Importación de citas', `${n} ${n === 1 ? 'cita' : 'citas'} importadas por ${shortName(NOMBRE)}`, ['inbox_tray'], 2).catch(() => {});
+    }
+    closeModal(); toast(`Se importaron ${n} citas`);
+  } catch (e) { msg.textContent = `${errMsg(e)} Alcanzó a importar ${n} de ${rows.length}.`; msg.className = 'err-msg'; }
+}
+function exportXLSX() {
+  if (typeof XLSX === 'undefined') return toast('No se cargó el generador de Excel. Recarga la página.', 'err');
+  if (!CITAS.length) return toast('No hay citas para exportar.', 'err');
+  const rows = sortList([...CITAS]).map(c => COLS.map(cl => cl.type === 'date' ? fmtDate(c[cl.k]) : (c[cl.k] ?? '')));
+  const ws = XLSX.utils.aoa_to_sheet([COLS.map(c => c.h), ...rows]);
+  ws['!cols'] = COLS.map(c => ({wch:Math.max(10, Math.round(c.w / 7))}));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Citas');
+  XLSX.writeFile(wb, `agenda_despachos_${todayISO()}.xlsx`);
+}
+
+/* ============ eventos ============ */
+function bind() {
+  const tbl = $('#tbl');
+  tbl.addEventListener('change', async e => {
+    const s = e.target.closest('.cellsel'); if (!s) return;
+    const {id, k} = s.dataset, td = s.closest('td');
+    td.className = 'c-sel ' + (k === 'estado' ? estadoCls(s.value) : stCls(k, s.value));
+    s.blur();
+    try { await patchCita(id, {[k]:s.value}); } catch (err) { toast(errMsg(err), 'err'); }
+  });
+  tbl.addEventListener('focusout', e => { if (e.target.classList && e.target.classList.contains('cellsel') && deferred) setTimeout(() => renderAll(), 0); });
+  tbl.addEventListener('click', e => {
+    const ed = e.target.closest('[data-act="edit"]'); if (ed) return openCita(ed.closest('tr').dataset.id);
+    const sortBtn = e.target.closest('[data-sort]');
+    if (sortBtn) { const k = sortBtn.dataset.sort; SORT = SORT.k === k ? {k, dir:-SORT.dir} : {k, dir:1}; renderAll(true); }
+  });
+  tbl.addEventListener('dblclick', e => { const td = e.target.closest('td.c-txt, td.c-date'); if (td) openCita(td.closest('tr').dataset.id); });
+  let ft;
+  tbl.addEventListener('input', e => { const fk = e.target.dataset && e.target.dataset.fk; if (!fk) return; F[fk] = e.target.value; clearTimeout(ft); ft = setTimeout(() => renderAll(true), 120); });
+  $('#week').addEventListener('click', e => { const c = e.target.closest('.wcard'); if (c) openCita(c.dataset.id); });
+  $('#chips').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; QUICK = b.dataset.q; renderAll(true); });
+  $('#chkClosed').addEventListener('change', e => { SHOWCLOSED = e.target.checked; renderAll(true); });
+  let st; $('#search').addEventListener('input', e => { SEARCH = e.target.value; clearTimeout(st); st = setTimeout(() => renderAll(true), 120); });
+  $('#btnClear').addEventListener('click', () => { F = {}; SEARCH = ''; QUICK = 'todas'; $('#search').value = ''; $$('.flt').forEach(f => { f.value = ''; }); renderAll(true); });
+  $('#vTabla').addEventListener('click', () => setView('tabla'));
+  $('#vSemana').addEventListener('click', () => setView('semana'));
+  $('#wPrev').addEventListener('click', () => { WEEK--; renderAll(true); });
+  $('#wNext').addEventListener('click', () => { WEEK++; renderAll(true); });
+  $('#wToday').addEventListener('click', () => { WEEK = 0; renderAll(true); });
+  $('#btnNew').addEventListener('click', () => { if (SESION && CANWRITE) openCita(null); });
+  $('#btnMaster').addEventListener('click', () => { if (SESION) openMaster(); });
+  $('#btnUsuarios').addEventListener('click', () => { if (SESION && ISADMIN) openUsuarios(); });
+  $('#btnImport').addEventListener('click', () => { if (SESION && CANWRITE) $('#fileIn').click(); });
+  $('#btnExport').addEventListener('click', exportXLSX);
+  $('#btnOut').addEventListener('click', cerrarSesion);
+  $('#fileIn').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try { openImportPreview(f.name, importParse(await f.arrayBuffer())); } catch (err) { toast(err.message || 'No pude leer el archivo.', 'err'); }
+  });
+  $('#loginForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = $('#lBtn'), er = $('#lErr'); btn.disabled = true; er.hidden = true;
+    try { await intentarLogin($('#lUser').value, $('#lPass').value); $('#lPass').value = ''; }
+    catch (err) { er.hidden = false; er.textContent = err.message || 'No se pudo iniciar sesión.'; }
+    finally { btn.disabled = false; }
+  });
+
+  const ov = $('#overlay');
+  $('#mClose').addEventListener('click', closeModal);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !ov.hidden) closeModal(); });
+  ov.addEventListener('click', e => {
+    const id = e.target.id;
+    if (id === 'mCancel') closeModal();
+    else if (id === 'mSave') saveCita();
+    else if (id === 'mDel') { $('#delWrap').hidden = true; $('#delAsk').hidden = false; }
+    else if (id === 'mDelNo') { $('#delWrap').hidden = false; $('#delAsk').hidden = true; }
+    else if (id === 'mDelYes') deleteCita();
+    else if (id === 'mDup') { const v = readForm(); closeModal(); openCita(null, {cliente:v.cliente, direccion:v.direccion, oc:v.oc, nv:v.nv, fechaNV:v.fechaNV}); toast('Duplicada: completa fecha y hora'); }
+    else if (id === 'mAdd') { $('#mrows').insertAdjacentHTML('beforeend', mrow({n:'', d:[]})); $$('.m-n').pop().focus(); }
+    else if (id === 'mFill') mergeFromCitas();
+    else if (id === 'mSaveM') saveMaster();
+    else if (id === 'mImport') runImport();
+    else if (id === 'uAdd') crearUsuarioForm();
+    else if (id === 'nSave') guardarNtfyForm();
+    else if (e.target.closest('.m-x')) e.target.closest('.mrow').remove();
+    else if (e.target.dataset.act === 'uborrar') eliminarUsuarioForm(e.target.dataset.uid);
+    else if (e.target.dataset.act === 'ureset') restablecerClaveForm(e.target.dataset.uid);
+  });
+  ov.addEventListener('input', e => {
+    if (M && M.kind === 'cita') {
+      if (e.target.dataset.f === 'cliente') fillDirList(e.target.value);
+      colorSelects(); updateHint();
+    }
+  });
+  ov.addEventListener('change', e => {
+    if (M && M.kind === 'usuarios' && e.target.classList.contains('usel')) cambiarRolForm(e.target.dataset.uid, e.target.value);
+  });
+  document.addEventListener('visibilitychange', () => { /* Firestore mantiene la conexión en segundo plano */ });
+}
+
+/* ============ sesión y arranque (usuarios propios de la app, sobre Firestore) ============ */
+const SESION_KEY = 'agendaDespachosSesion';
+function renderMe() {
+  const me = $('#me');
+  me.innerHTML = NOMBRE
+    ? `<span class="av" aria-hidden="true">${esc(NOMBRE.charAt(0).toUpperCase())}</span><span>${esc(NOMBRE)}</span>${ROLE ? `<span class="role${ISADMIN ? ' admin' : ''}">${esc(ROLE_LABEL[ROLE] || ROLE)}</span>` : ''}`
+    : '';
+  $('#btnOut').hidden = !NOMBRE;
+  $('#btnUsuarios').hidden = !ISADMIN;
+  $('#btnNew').disabled = !CANWRITE; $('#btnImport').disabled = !CANWRITE;
+}
+function showLogin() { $('#login').hidden = false; refreshLoginUserList(); }
+function hideLogin() { $('#login').hidden = true; }
+function refreshLoginUserList() {
+  const sel = $('#lUser'); if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = USUARIOS.slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .map(u => `<option value="${esc(u.id)}">${esc(u.nombre)}</option>`).join('') || '<option value="">(sin usuarios)</option>';
+  if (prev && USUARIOS.some(u => u.id === prev)) sel.value = prev;
+}
+async function intentarLogin(uid, password) {
+  const u = USUARIOS.find(x => x.id === uid);
+  if (!u) throw new Error('Elige tu usuario de la lista.');
+  const hash = await sha256hex(password);
+  if (hash !== u.claveHash) throw new Error('Clave incorrecta.');
+  aplicarSesion(u, hash);
+}
+function aplicarSesion(u, hash) {
+  SESION = {uid: u.id}; NOMBRE = u.nombre; UID = u.id; ROLE = u.rol;
+  ISADMIN = ROLE === 'admin'; CANWRITE = ROLE === 'admin' || ROLE === 'editor';
+  try { localStorage.setItem(SESION_KEY, JSON.stringify({uid: u.id, hash})); } catch (e) {}
+  BANNER = ''; hideLogin(); renderMe();
+  if (!STARTED) { STARTED = true; startData(); } else renderAll(true);
+}
+function cerrarSesion() {
+  SESION = null; NOMBRE = ''; UID = ''; ROLE = ''; CANWRITE = false; ISADMIN = false;
+  try { localStorage.removeItem(SESION_KEY); } catch (e) {}
+  renderMe(); if (STARTED) stopData(); showLogin(); setSync('off', 'Sin sesión'); renderAll(true);
+}
+async function sembrarAdminSiNoHay() {
+  if (USUARIOS.length) return;
+  const claveHash = await sha256hex('admin123');
+  await db.collection('usuarios').doc('admin').set({
+    nombre: 'Administrador', claveHash, rol: 'admin', creadoEn: firebase.firestore.FieldValue.serverTimestamp(), creadoPor: 'sistema',
+  }).catch(() => {});
+  BANNER = 'Se creó un usuario inicial: Administrador / admin123 — inicia sesión con él y cámbialo en "Usuarios y roles".';
+  renderAll(true);
+}
+function onUsuarios(snap) {
+  USUARIOS = snap.docs.map(d => ({id: d.id, ...d.data()}));
+  USUARIOS_LISTOS = true;
+  if (M && M.kind === 'usuarios') refreshUsuariosList();
+  if (!SESION) {
+    refreshLoginUserList();
+    if (!USUARIOS.length) sembrarAdminSiNoHay();
+    else restaurarSesionGuardada();
+  } else {
+    const yo = USUARIOS.find(u => u.id === UID);
+    if (!yo) { toast('Se quitó tu acceso.', 'err'); cerrarSesion(); return; }
+    ROLE = yo.rol; NOMBRE = yo.nombre;
+    ISADMIN = ROLE === 'admin'; CANWRITE = ROLE === 'admin' || ROLE === 'editor';
+    renderMe(); renderAll(true);
+  }
+}
+function restaurarSesionGuardada() {
+  let saved; try { saved = JSON.parse(localStorage.getItem(SESION_KEY) || 'null'); } catch (e) { saved = null; }
+  if (!saved) return;
+  const u = USUARIOS.find(x => x.id === saved.uid);
+  if (!u || u.claveHash !== saved.hash) { try { localStorage.removeItem(SESION_KEY); } catch (e) {} return; }
+  aplicarSesion(u, saved.hash);
+}
+function looksConfigured() {
+  return /^AIza/.test(FIREBASE_CONFIG.apiKey) && !/TU-PROYECTO|TU_/.test(FIREBASE_CONFIG.projectId + FIREBASE_CONFIG.apiKey + FIREBASE_CONFIG.appId);
+}
+function boot() {
+  buildHead(); buildChips(); bind(); renderAll(true);
+  if (!looksConfigured()) {
+    BANNER = 'Falta configurar la conexión: edita FIREBASE_CONFIG al inicio de este archivo con los datos de tu proyecto Firebase.';
+    setSync('off', 'Sin configurar'); renderAll(true); return;
+  }
+  firebase.initializeApp(FIREBASE_CONFIG);
+  auth = firebase.auth(); db = firebase.firestore();
+  showLogin(); setSync('wait', 'Conectando…');
+  auth.signInAnonymously().then(() => {
+    unsubs.push(db.collection('usuarios').onSnapshot(onUsuarios, err => { BANNER = errMsg(err); renderAll(true); }));
+  }).catch(err => { BANNER = errMsg(err); setSync('off', 'Sin conexión'); renderAll(true); });
+}
+boot();
+</script>
+</body>
+</html>
