@@ -711,6 +711,7 @@ async function removeCita(id) {
   await db.collection('citas').doc(id).delete();
 }
 async function saveResultadoEntrega(id, valor, entregaObj) {
+  let notif = null;
   await db.runTransaction(async tx => {
     const ref = db.collection('citas').doc(id);
     const snap = await tx.get(ref);
@@ -720,8 +721,39 @@ async function saveResultadoEntrega(id, valor, entregaObj) {
     if ((cur.conforme || '') !== valor) entries.push({t:now, u:NOMBRE, f:'conforme', a:clip(cur.conforme || ''), b:clip(valor)});
     entries.push({t:now, u:NOMBRE, f:'_entrega', a:'', b: (cur.entrega ? 'Actualizó' : 'Registró') + ' el resultado de la entrega (' + (valor === 'SI' ? 'conforme' : 'no conforme') + ')'});
     const log = [...(cur.log || []), ...entries].slice(-40);
+    // Avisamos por NTFY cada vez que se registra o cambia el resultado (conforme o no conforme).
+    notif = {...cur, conforme:valor, entrega:entregaObj, modificadoPor:NOMBRE};
     tx.update(ref, {conforme:valor, entrega:entregaObj, log, modificadoPor:NOMBRE, modificadoEn:firebase.firestore.FieldValue.serverTimestamp()});
   });
+  if (notif) {
+    if (notif.conforme === 'SI') {
+      ntfyEnviar(
+        'Cita entregada conforme: ' + (notif.cliente || '(sin cliente)'),
+        [
+          `${fmtDate(notif.fechaCita)} ${notif.horaCita || 's/h'}`,
+          notif.direccion || '',
+          `NV: ${notif.nv || '—'} · OC: ${notif.oc || '—'}`,
+          notif.entrega.puntualidad ? `Puntualidad: ${notif.entrega.puntualidad}` : '',
+          notif.entrega.carga ? `Carga: ${notif.entrega.carga}` : '',
+          notif.entrega.documento ? `Documento: ${notif.entrega.documento}` : '',
+          `Confirmada por ${shortName(notif.modificadoPor)}`,
+        ].filter(Boolean).join('\n'),
+        ['white_check_mark'], 3
+      ).catch(() => {});
+    } else {
+      ntfyEnviar(
+        'Cita NO conforme: ' + (notif.cliente || '(sin cliente)'),
+        [
+          `${fmtDate(notif.fechaCita)} ${notif.horaCita || 's/h'}`,
+          notif.direccion || '',
+          `NV: ${notif.nv || '—'} · OC: ${notif.oc || '—'}`,
+          notif.entrega.motivo ? `Motivo: ${notif.entrega.motivo}` : '',
+          `Registrada por ${shortName(notif.modificadoPor)}`,
+        ].filter(Boolean).join('\n'),
+        ['warning'], 4
+      ).catch(() => {});
+    }
+  }
 }
 async function learnMaster(rows) {
   const byKey = new Map(MASTER.map(x => [nrm(x.n), {n:x.n, d:[...x.d]}])), touched = new Set();
