@@ -197,6 +197,14 @@ legend{padding:0 6px;font-weight:600}
 .prev b{font-variant-numeric:tabular-nums}
 
 .sheet.login{width:min(420px,100%);margin-top:8vh}
+.sheet.wide{width:min(920px,97vw)}
+.dashgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.dashcard{border:1px solid var(--line);border-radius:10px;padding:14px}
+.dashcard h3{margin:0 0 10px;font-size:13px;font-weight:600}
+.pie{width:150px;height:150px;border-radius:50%;margin:0 auto 12px}
+.legend2{list-style:none;margin:0;padding:0;font-size:12px;color:var(--ink-2)}
+.legend2 li{display:flex;align-items:center;gap:6px;margin:4px 0}
+.dot2{width:10px;height:10px;border-radius:3px;flex:none}
 .pwdwrap{position:relative;display:flex}
 .pwdwrap .inp{padding-right:36px}
 .pwdtoggle{position:absolute;right:3px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:0;background:transparent;color:var(--ink-2);cursor:pointer;display:inline-grid;place-items:center;border-radius:5px}
@@ -228,6 +236,7 @@ legend{padding:0 6px;font-weight:600}
     <h1>APP CITAS AGENDADAS</h1>
     <span class="sync" id="sync" role="status"><i></i><span id="syncTxt">Conectando…</span></span>
     <span class="grow"></span>
+    <button type="button" class="btn" id="btnDashboard">Dashboard</button>
     <button type="button" class="btn" id="btnMaster">Clientes y destinos</button>
     <button type="button" class="btn" id="btnUsuarios" hidden>Usuarios y roles</button>
     <button type="button" class="btn" id="btnImport">Importar Excel</button>
@@ -328,6 +337,12 @@ const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const ROLES = ['admin', 'editor', 'lector'];
 const ROLE_LABEL = {admin:'Administrador', editor:'Editor', lector:'Lector'};
+const ENTREGA_PUNTUALIDAD = ['A tiempo', 'Anticipada', 'Atrasada'];
+const ENTREGA_PRESENTE = ['Sí, alguien recibió', 'No se presentó nadie (no-show)'];
+const ENTREGA_CARGA = ['Conforme', 'Con diferencia de cantidad', 'Con daño o avería', 'Rechazo parcial'];
+const ENTREGA_DOC = ['Firmado sin observaciones', 'Firmado con observaciones', 'Sin firma (pendiente de recuperar)'];
+const ENTREGA_MOTIVO_NO = ['Cliente no se presentó / no recibió', 'Cliente rechazó la mercadería', 'Documentación incompleta o incorrecta', 'Mercadería dañada detectada en recepción', 'Fuera de horario de recepción', 'Problema con el vehículo o transporte', 'Otro'];
+const DASH_PALETTE = ['#1565C0', '#2E7D32', '#F9A825', '#C62828', '#6A1B9A', '#00897B', '#8D6E63'];
 async function sha256hex(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
@@ -336,6 +351,7 @@ async function sha256hex(text) {
 /* ============ modelo ============ */
 const COLS = [
   {k:'estado',   h:'ESTADO', type:'select', opts:['PENDIENTE','DESPACHADA','REPROGRAMADA','CANCELADA'], w:120},
+  {k:'conforme', h:'RECIBIDA', type:'select', opts:['','SI','NO'], w:110},
   {k:'cliente',  h:'CLIENTE', type:'text', w:130},
   {k:'oc',       h:'OC', type:'text', w:150},
   {k:'nv',       h:'NV', type:'text', w:150},
@@ -347,10 +363,9 @@ const COLS = [
   {k:'nvRecep',  h:'NV RECEP. EN DESPACHO', type:'select', opts:['','SI','NO','N/A'], w:132},
   {k:'pallet',   h:'PALLETIZADO Y ETIQUETADO', type:'select', opts:['','PREPARADO','EN PREPARACIÓN','N/A'], w:170},
   {k:'pallets',  h:'PALLETS Y BULTOS', type:'text', w:160},
-  {k:'conforme', h:'RECIBIDA', type:'select', opts:['','SI','NO'], w:110},
   {k:'obs',      h:'OBSERVACIONES', type:'text', w:260},
 ];
-const ACT_W = 190;
+const ACT_W = 220;
 const FIELDS = COLS.map(c => c.k);
 const LABEL = Object.fromEntries(COLS.map(c => [c.k, c.h.charAt(0) + c.h.slice(1).toLowerCase()]));
 const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', nvRecep:'', pallet:'', pallets:'', conforme:'', obs:''});
@@ -503,7 +518,8 @@ function rowHTML(c) {
     if (cl.type === 'date') return `<td class="c-date ${cl.k === 'fechaCita' ? dcls : ''}" title="${esc(fmtDate(v))}">${esc(fmtDate(v))}</td>`;
     return `<td class="c-txt" title="${esc(v)}">${esc(v)}</td>`;
   }).join('');
-  return `<tr data-id="${esc(c.id)}"${closed ? ' class="closed"' : ''}><td class="c-act"><div class="actwrap"><button type="button" class="btn sm editbtn" data-act="edit" aria-label="Editar cita de ${esc(c.cliente)}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Editar</button><button type="button" class="ib histbtn" data-act="hist" aria-label="Ver historial de cambios de la cita de ${esc(c.cliente)}" title="Historial de cambios"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></button>${flagsHTML(a)}</div></td>${tds}</tr>`;
+  const entregaBtn = (c.conforme === 'SI' || c.conforme === 'NO') ? `<button type="button" class="ib histbtn" data-act="entrega" aria-label="Resultado de la entrega de la cita de ${esc(c.cliente)}" title="Resultado de la entrega"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></button>` : '';
+  return `<tr data-id="${esc(c.id)}"${closed ? ' class="closed"' : ''}><td class="c-act"><div class="actwrap"><button type="button" class="btn sm editbtn" data-act="edit" aria-label="Editar cita de ${esc(c.cliente)}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Editar</button><button type="button" class="ib histbtn" data-act="hist" aria-label="Ver historial de cambios de la cita de ${esc(c.cliente)}" title="Historial de cambios"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></button>${entregaBtn}${flagsHTML(a)}</div></td>${tds}</tr>`;
 }
 function emptyMsg() {
   if (!SESION) return 'Inicia sesión para ver las citas.';
@@ -694,6 +710,19 @@ async function createCita(d) {
 async function removeCita(id) {
   await db.collection('citas').doc(id).delete();
 }
+async function saveResultadoEntrega(id, valor, entregaObj) {
+  await db.runTransaction(async tx => {
+    const ref = db.collection('citas').doc(id);
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new Error('La cita ya no existe: puede que otra persona la haya eliminado.');
+    const cur = snap.data();
+    const now = Date.now(), entries = [];
+    if ((cur.conforme || '') !== valor) entries.push({t:now, u:NOMBRE, f:'conforme', a:clip(cur.conforme || ''), b:clip(valor)});
+    entries.push({t:now, u:NOMBRE, f:'_entrega', a:'', b: (cur.entrega ? 'Actualizó' : 'Registró') + ' el resultado de la entrega (' + (valor === 'SI' ? 'conforme' : 'no conforme') + ')'});
+    const log = [...(cur.log || []), ...entries].slice(-40);
+    tx.update(ref, {conforme:valor, entrega:entregaObj, log, modificadoPor:NOMBRE, modificadoEn:firebase.firestore.FieldValue.serverTimestamp()});
+  });
+}
 async function learnMaster(rows) {
   const byKey = new Map(MASTER.map(x => [nrm(x.n), {n:x.n, d:[...x.d]}])), touched = new Set();
   rows.forEach(r => {
@@ -718,7 +747,7 @@ function openSheet(title, body, foot) {
   if (f) f.focus();
 }
 function closeModal() {
-  $('#overlay').hidden = true; M = null;
+  $('#overlay').hidden = true; $('.sheet').classList.remove('wide'); M = null;
   if (lastFocus && lastFocus.focus && document.contains(lastFocus)) lastFocus.focus();
 }
 function showErr(msg) {
@@ -734,6 +763,7 @@ function histItemsHTML(log) {
   return `<ul>${log.map(e => {
     const who = esc(shortName(e.u));
     if (e.f === '_creada') return `<li>${fmtTS(e.t)} · <b>${who}</b> creó la cita</li>`;
+    if (e.f === '_entrega') return `<li>${fmtTS(e.t)} · <b>${who}</b> ${esc(e.b)}</li>`;
     const lab = (LABEL[e.f] || e.f).toLowerCase();
     return `<li>${fmtTS(e.t)} · <b>${who}</b> cambió ${esc(lab)}: <span class="was">${esc(isISO(e.a) ? fmtDate(e.a) : (e.a || '—'))}</span> → ${esc(isISO(e.b) ? fmtDate(e.b) : (e.b || '—'))}</li>`;
   }).join('')}</ul>`;
@@ -848,6 +878,106 @@ async function saveCita() {
 async function deleteCita() {
   try { await removeCita(M.id); closeModal(); toast('Cita eliminada'); }
   catch (e) { showErr(errMsg(e)); }
+}
+
+/* ============ modal: resultado de la entrega ============ */
+function openResultadoEntrega(id, valor, selEl) {
+  const c = CITAS.find(x => x.id === id); if (!c) return;
+  const e0 = c.entrega || {};
+  M = {kind:'entrega', id, valor, selEl};
+  let body;
+  if (valor === 'SI') {
+    body = `
+      <p class="muted" style="margin:0">Cliente: <b>${esc(c.cliente)}</b> · ${esc(fmtDate(c.fechaCita))} ${esc(c.horaCita || '')}</p>
+      <div class="grid">
+        <label class="f s3"><span class="fl">Puntualidad</span>${sel('ePuntualidad', ENTREGA_PUNTUALIDAD, e0.puntualidad || '')}</label>
+        <label class="f s3"><span class="fl">¿Hubo alguien para recibir?</span>${sel('ePresente', ENTREGA_PRESENTE, e0.presente || '')}</label>
+        <label class="f s3"><span class="fl">Estado de la carga recibida</span>${sel('eCarga', ENTREGA_CARGA, e0.carga || '')}</label>
+        <label class="f s3"><span class="fl">Diferencia (si aplica)</span>${inp('eDiferencia', e0.diferencia || '', 'placeholder="ej: faltaron 2 pallets"')}</label>
+        <label class="f s3"><span class="fl">Documento de entrega</span>${sel('eDocumento', ENTREGA_DOC, e0.documento || '')}</label>
+      </div>
+      <label class="f s6"><span class="fl">Observaciones de la entrega</span><textarea class="inp" data-f="eObs" rows="2">${esc(e0.obs || '')}</textarea></label>`;
+  } else {
+    body = `
+      <p class="muted" style="margin:0">Cliente: <b>${esc(c.cliente)}</b> · ${esc(fmtDate(c.fechaCita))} ${esc(c.horaCita || '')}</p>
+      <div class="grid">
+        <label class="f s6"><span class="fl">Motivo de no conformidad</span>${sel('eMotivo', ENTREGA_MOTIVO_NO, e0.motivo || '')}</label>
+      </div>
+      <label class="f s6"><span class="fl">Observaciones</span><textarea class="inp" data-f="eObs" rows="2">${esc(e0.obs || '')}</textarea></label>`;
+  }
+  openSheet('Resultado de la entrega', body,
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="eSave"${CANWRITE ? '' : ' disabled'}>Guardar</button>`);
+}
+async function saveEntregaForm() {
+  const {id, valor} = M;
+  const g = f => { const el = $(`#mBody [data-f="${f}"]`); return el ? el.value.trim() : ''; };
+  let entrega;
+  if (valor === 'SI') {
+    entrega = {puntualidad:g('ePuntualidad'), presente:g('ePresente'), carga:g('eCarga'), diferencia:g('eDiferencia'), documento:g('eDocumento'), obs:g('eObs')};
+    if (!entrega.puntualidad || !entrega.presente || !entrega.carga || !entrega.documento) return showErr('Completa Puntualidad, ¿Hubo alguien para recibir?, Estado de la carga y Documento de entrega.');
+  } else {
+    entrega = {motivo:g('eMotivo'), obs:g('eObs')};
+    if (!entrega.motivo) return showErr('Indica el motivo de no conformidad.');
+  }
+  const btn = $('#eSave'); btn.disabled = true;
+  try {
+    await saveResultadoEntrega(id, valor, entrega);
+    closeModal(); toast('Resultado de la entrega guardado');
+  } catch (e) { showErr(errMsg(e)); btn.disabled = false; }
+}
+
+/* ============ dashboard ============ */
+function pieCSS(parts) {
+  const total = parts.reduce((s, p) => s + p.v, 0);
+  if (!total) return 'conic-gradient(var(--line-2) 0 100%)';
+  let acc = 0, stops = [];
+  parts.forEach(p => {
+    if (!p.v) return;
+    const start = acc, end = acc + (p.v / total) * 100;
+    stops.push(`${p.color} ${start}% ${end}%`);
+    acc = end;
+  });
+  return `conic-gradient(${stops.join(',')})`;
+}
+function dashBlock(title, obj, emptyNote) {
+  const entries = Object.entries(obj).filter(([, v]) => v > 0);
+  const totalN = entries.reduce((a, [, v]) => a + v, 0);
+  if (!totalN) return `<div class="dashcard"><h3>${esc(title)}</h3><p class="muted" style="margin:0">${esc(emptyNote || 'Sin datos todavía.')}</p></div>`;
+  const parts = entries.map(([label, v], i) => ({label, v, color:DASH_PALETTE[i % DASH_PALETTE.length]}));
+  const legend = parts.map(p => `<li><i class="dot2" style="background:${p.color}"></i>${esc(p.label)} — <b>${p.v}</b> (${Math.round(p.v / totalN * 100)}%)</li>`).join('');
+  return `<div class="dashcard"><h3>${esc(title)}</h3><div class="pie" style="background:${pieCSS(parts)}"></div><ul class="legend2">${legend}</ul></div>`;
+}
+function computeDashboardStats() {
+  const recibida = {'Recibida conforme':0, 'Recibida no conforme':0, 'Aún sin registrar':0};
+  const punt = {}, carga = {}, doc = {}, motivo = {};
+  CITAS.forEach(c => {
+    if (c.conforme === 'SI') recibida['Recibida conforme']++;
+    else if (c.conforme === 'NO') recibida['Recibida no conforme']++;
+    else recibida['Aún sin registrar']++;
+    if (c.conforme === 'SI' && c.entrega) {
+      const e = c.entrega;
+      if (e.puntualidad) punt[e.puntualidad] = (punt[e.puntualidad] || 0) + 1;
+      if (e.carga) carga[e.carga] = (carga[e.carga] || 0) + 1;
+      if (e.documento) doc[e.documento] = (doc[e.documento] || 0) + 1;
+    }
+    if (c.conforme === 'NO' && c.entrega && c.entrega.motivo) motivo[c.entrega.motivo] = (motivo[c.entrega.motivo] || 0) + 1;
+  });
+  return {total:CITAS.length, recibida, punt, carga, doc, motivo};
+}
+function openDashboard() {
+  M = {kind:'dashboard'};
+  const s = computeDashboardStats();
+  const body = `
+    <p class="muted" style="margin:0 0 4px">Basado en ${s.total} ${s.total === 1 ? 'cita registrada' : 'citas registradas'}.</p>
+    <div class="dashgrid">
+      ${dashBlock('Recibida', s.recibida)}
+      ${dashBlock('Puntualidad de la entrega', s.punt, 'Aún no hay citas recibidas conformes con el resultado registrado.')}
+      ${dashBlock('Estado de la carga recibida', s.carga, 'Aún no hay citas recibidas conformes con el resultado registrado.')}
+      ${dashBlock('Documento de entrega', s.doc, 'Aún no hay citas recibidas conformes con el resultado registrado.')}
+      ${dashBlock('Motivos de no conformidad', s.motivo, 'Aún no hay citas marcadas como no recibidas.')}
+    </div>`;
+  openSheet('Dashboard', body, `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cerrar</button>`);
+  $('.sheet').classList.add('wide');
 }
 
 /* ============ modal: clientes y destinos ============ */
@@ -1101,6 +1231,11 @@ function bind() {
   tbl.addEventListener('change', async e => {
     const s = e.target.closest('.cellsel'); if (!s) return;
     const {id, k} = s.dataset, td = s.closest('td');
+    if (k === 'conforme' && (s.value === 'SI' || s.value === 'NO')) {
+      s.blur();
+      openResultadoEntrega(id, s.value, s);
+      return;
+    }
     td.className = 'c-sel ' + (k === 'estado' ? estadoCls(s.value) : stCls(k, s.value));
     s.blur();
     try { await patchCita(id, {[k]:s.value}); } catch (err) { toast(errMsg(err), 'err'); }
@@ -1109,6 +1244,8 @@ function bind() {
   tbl.addEventListener('click', e => {
     const ed = e.target.closest('[data-act="edit"]'); if (ed) return openCita(ed.closest('tr').dataset.id);
     const hi = e.target.closest('[data-act="hist"]'); if (hi) return openHistorial(hi.closest('tr').dataset.id);
+    const en = e.target.closest('[data-act="entrega"]');
+    if (en) { const rid = en.closest('tr').dataset.id; const cc = CITAS.find(x => x.id === rid); if (cc) openResultadoEntrega(rid, cc.conforme, undefined); return; }
     const sortBtn = e.target.closest('[data-sort]');
     if (sortBtn) { const k = sortBtn.dataset.sort; SORT = SORT.k === k ? {k, dir:-SORT.dir} : {k, dir:1}; renderAll(true); }
   });
@@ -1126,6 +1263,7 @@ function bind() {
   $('#wNext').addEventListener('click', () => { WEEK++; renderAll(true); });
   $('#wToday').addEventListener('click', () => { WEEK = 0; renderAll(true); });
   $('#btnNew').addEventListener('click', () => { if (SESION && CANWRITE) openCita(null); });
+  $('#btnDashboard').addEventListener('click', () => { if (SESION) openDashboard(); });
   $('#btnMaster').addEventListener('click', () => { if (SESION) openMaster(); });
   $('#btnUsuarios').addEventListener('click', () => { if (SESION && ISADMIN) openUsuarios(); });
   $('#btnImport').addEventListener('click', () => { if (SESION && CANWRITE) $('#fileIn').click(); });
@@ -1144,12 +1282,13 @@ function bind() {
   });
 
   const ov = $('#overlay');
-  $('#mClose').addEventListener('click', closeModal);
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !ov.hidden) closeModal(); });
+  $('#mClose').addEventListener('click', () => { const wasEntrega = M && M.kind === 'entrega'; closeModal(); if (wasEntrega) renderAll(true); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !ov.hidden) { const wasEntrega = M && M.kind === 'entrega'; closeModal(); if (wasEntrega) renderAll(true); } });
   ov.addEventListener('click', e => {
     const id = e.target.id;
-    if (id === 'mCancel') closeModal();
+    if (id === 'mCancel') { const wasEntrega = M && M.kind === 'entrega'; closeModal(); if (wasEntrega) renderAll(true); }
     else if (id === 'mSave') saveCita();
+    else if (id === 'eSave') saveEntregaForm();
     else if (id === 'mDel') { $('#delWrap').hidden = true; $('#delAsk').hidden = false; }
     else if (id === 'mDelNo') { $('#delWrap').hidden = false; $('#delAsk').hidden = true; }
     else if (id === 'mDelYes') deleteCita();
