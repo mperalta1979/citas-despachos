@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>APP CITAS AGENDADAS</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1F5FA8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Citas Agendadas">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -129,6 +137,7 @@ main{flex:1;min-height:0;overflow:auto;background:var(--surface)}
 select option{background:var(--surface);color:var(--ink)}
 .actwrap{display:flex;align-items:center;gap:4px}
 .editbtn{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex:none}
+.histbtn{flex:none}
 .flag{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:4px;line-height:1.5;white-space:nowrap}
 .f-late{background:var(--late-bg);color:var(--late-ink)}
 .f-risk{background:var(--bad-bg);color:var(--bad-ink)}
@@ -176,9 +185,11 @@ legend{padding:0 6px;font-weight:600}
 .hint.ok{background:var(--ok-bg);color:var(--ok-ink)} .hint.bad{background:var(--bad-bg);color:var(--bad-ink)} .hint.warn{background:var(--warn-bg);color:var(--warn-ink)} .hint.clash{background:var(--clash-bg);color:var(--clash-ink)}
 .hint+.hint{margin-top:6px}
 .err-msg{color:var(--bad-ink);background:var(--bad-bg);padding:6px 10px;border-radius:6px}
-details.hist summary{cursor:pointer;font-weight:500}
-details.hist ul{margin:8px 0 0;padding-left:18px;color:var(--ink-2);font-size:12px}
-details.hist li{margin:3px 0}
+.hist{border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.hist summary{cursor:pointer;font-weight:600}
+.hist ul{margin:8px 0 0;padding-left:18px;color:var(--ink-2);font-size:12px}
+.hist li{margin:3px 0}
+.hist.plain ul{margin:0;padding-left:18px}
 .was{text-decoration:line-through}
 .mrow{display:grid;grid-template-columns:200px 1fr 28px;gap:8px;align-items:start;margin-bottom:8px}
 .mtools{display:flex;gap:8px;flex-wrap:wrap}
@@ -186,6 +197,10 @@ details.hist li{margin:3px 0}
 .prev b{font-variant-numeric:tabular-nums}
 
 .sheet.login{width:min(420px,100%);margin-top:8vh}
+.pwdwrap{position:relative;display:flex}
+.pwdwrap .inp{padding-right:36px}
+.pwdtoggle{position:absolute;right:3px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:0;background:transparent;color:var(--ink-2);cursor:pointer;display:inline-grid;place-items:center;border-radius:5px}
+.pwdtoggle:hover{background:var(--accent-soft);color:var(--accent)}
 .me .av{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:inline-grid;place-items:center;font-weight:600;font-size:12px}
 .urow{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line-2);flex-wrap:wrap}
 .urow .uinfo{flex:1;min-width:120px}
@@ -253,7 +268,7 @@ details.hist li{margin:3px 0}
     <div class="mbody">
       <p class="muted" style="margin:0">Elige tu nombre e ingresa tu clave.</p>
       <label class="f"><span class="fl">Usuario</span><select class="inp" id="lUser" required></select></label>
-      <label class="f"><span class="fl">Contraseña</span><input class="inp" type="password" id="lPass" autocomplete="current-password" required></label>
+      <label class="f"><span class="fl">Contraseña</span><div class="pwdwrap"><input class="inp" type="password" id="lPass" autocomplete="current-password" required><button type="button" class="pwdtoggle" data-for="lPass" aria-label="Mostrar la contraseña"><svg class="eyeOpen" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eyeClosed" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.3 21.3 0 0 1 5.17-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a21.3 21.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg></button></div></label>
       <div id="lErr" class="err-msg" hidden></div>
       <p class="fh" style="margin:0">¿Olvidaste tu clave? Pide a un administrador que te la restablezca desde "Usuarios y roles".</p>
     </div>
@@ -335,7 +350,7 @@ const COLS = [
   {k:'conforme', h:'RECIBIDA', type:'select', opts:['','SI','NO'], w:110},
   {k:'obs',      h:'OBSERVACIONES', type:'text', w:260},
 ];
-const ACT_W = 160;
+const ACT_W = 190;
 const FIELDS = COLS.map(c => c.k);
 const LABEL = Object.fromEntries(COLS.map(c => [c.k, c.h.charAt(0) + c.h.slice(1).toLowerCase()]));
 const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', nvRecep:'', pallet:'', pallets:'', conforme:'', obs:''});
@@ -488,7 +503,7 @@ function rowHTML(c) {
     if (cl.type === 'date') return `<td class="c-date ${cl.k === 'fechaCita' ? dcls : ''}" title="${esc(fmtDate(v))}">${esc(fmtDate(v))}</td>`;
     return `<td class="c-txt" title="${esc(v)}">${esc(v)}</td>`;
   }).join('');
-  return `<tr data-id="${esc(c.id)}"${closed ? ' class="closed"' : ''}><td class="c-act"><div class="actwrap"><button type="button" class="btn sm editbtn" data-act="edit" aria-label="Editar cita de ${esc(c.cliente)}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Editar</button>${flagsHTML(a)}</div></td>${tds}</tr>`;
+  return `<tr data-id="${esc(c.id)}"${closed ? ' class="closed"' : ''}><td class="c-act"><div class="actwrap"><button type="button" class="btn sm editbtn" data-act="edit" aria-label="Editar cita de ${esc(c.cliente)}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Editar</button><button type="button" class="ib histbtn" data-act="hist" aria-label="Ver historial de cambios de la cita de ${esc(c.cliente)}" title="Historial de cambios"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></button>${flagsHTML(a)}</div></td>${tds}</tr>`;
 }
 function emptyMsg() {
   if (!SESION) return 'Inicia sesión para ver las citas.';
@@ -715,15 +730,25 @@ function showErr(msg) {
 const inp = (f, v, extra = '') => `<input class="inp" data-f="${f}" value="${esc(v)}" ${extra}>`;
 const sel = (f, opts, v) => { const o = (opts.includes(v) || v === '') ? opts : [...opts, v]; return `<select class="inp" data-f="${f}">${o.map(x => `<option value="${esc(x)}"${x === v ? ' selected' : ''}>${x === '' ? '—' : esc(x)}</option>`).join('')}</select>`; };
 const optsOf = k => COLS.find(c => c.k === k).opts;
-function histHTML(c) {
-  const log = (c.log || []).slice().reverse();
-  if (!log.length) return '';
-  return `<details class="hist"><summary>Historial de cambios (${log.length})</summary><ul>${log.map(e => {
+function histItemsHTML(log) {
+  return `<ul>${log.map(e => {
     const who = esc(shortName(e.u));
     if (e.f === '_creada') return `<li>${fmtTS(e.t)} · <b>${who}</b> creó la cita</li>`;
     const lab = (LABEL[e.f] || e.f).toLowerCase();
     return `<li>${fmtTS(e.t)} · <b>${who}</b> cambió ${esc(lab)}: <span class="was">${esc(isISO(e.a) ? fmtDate(e.a) : (e.a || '—'))}</span> → ${esc(isISO(e.b) ? fmtDate(e.b) : (e.b || '—'))}</li>`;
-  }).join('')}</ul></details>`;
+  }).join('')}</ul>`;
+}
+function histHTML(c) {
+  const log = (c.log || []).slice().reverse();
+  if (!log.length) return '';
+  return `<details class="hist" open><summary>Historial de cambios (${log.length})</summary>${histItemsHTML(log)}</details>`;
+}
+function openHistorial(id) {
+  const c = CITAS.find(x => x.id === id); if (!c) return;
+  const log = (c.log || []).slice().reverse();
+  openSheet(`Historial · ${c.cliente || '(sin cliente)'}`,
+    log.length ? `<div class="hist plain">${histItemsHTML(log)}</div>` : '<p class="muted" style="margin:0">Esta cita aún no tiene cambios registrados.</p>',
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cerrar</button>`);
 }
 function openCita(id, preset) {
   const c = id ? CITAS.find(x => x.id === id) : null;
@@ -1083,6 +1108,7 @@ function bind() {
   tbl.addEventListener('focusout', e => { if (e.target.classList && e.target.classList.contains('cellsel') && deferred) setTimeout(() => renderAll(), 0); });
   tbl.addEventListener('click', e => {
     const ed = e.target.closest('[data-act="edit"]'); if (ed) return openCita(ed.closest('tr').dataset.id);
+    const hi = e.target.closest('[data-act="hist"]'); if (hi) return openHistorial(hi.closest('tr').dataset.id);
     const sortBtn = e.target.closest('[data-sort]');
     if (sortBtn) { const k = sortBtn.dataset.sort; SORT = SORT.k === k ? {k, dir:-SORT.dir} : {k, dir:1}; renderAll(true); }
   });
@@ -1148,6 +1174,15 @@ function bind() {
     if (M && M.kind === 'usuarios' && e.target.classList.contains('usel')) cambiarRolForm(e.target.dataset.uid, e.target.value);
   });
   document.addEventListener('visibilitychange', () => { /* Firestore mantiene la conexión en segundo plano */ });
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.pwdtoggle'); if (!btn) return;
+    const target = document.getElementById(btn.dataset.for); if (!target) return;
+    const show = target.type === 'password';
+    target.type = show ? 'text' : 'password';
+    const eo = btn.querySelector('.eyeOpen'), ec = btn.querySelector('.eyeClosed');
+    if (eo && ec) { eo.hidden = show; ec.hidden = !show; }
+    btn.setAttribute('aria-label', show ? 'Ocultar la contraseña' : 'Mostrar la contraseña');
+  });
 }
 
 /* ============ sesión y arranque (usuarios propios de la app, sobre Firestore) ============ */
