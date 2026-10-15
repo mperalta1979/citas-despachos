@@ -128,6 +128,7 @@ main{flex:1;min-height:0;overflow:auto;background:var(--surface)}
 .cellsel:disabled{cursor:default;opacity:1}
 select option{background:var(--surface);color:var(--ink)}
 .actwrap{display:flex;align-items:center;gap:4px}
+.editbtn{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex:none}
 .flag{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:4px;line-height:1.5;white-space:nowrap}
 .f-late{background:var(--late-bg);color:var(--late-ink)}
 .f-risk{background:var(--bad-bg);color:var(--bad-ink)}
@@ -334,7 +335,7 @@ const COLS = [
   {k:'conforme', h:'RECIBIDA', type:'select', opts:['','SI','NO'], w:110},
   {k:'obs',      h:'OBSERVACIONES', type:'text', w:260},
 ];
-const ACT_W = 140;
+const ACT_W = 160;
 const FIELDS = COLS.map(c => c.k);
 const LABEL = Object.fromEntries(COLS.map(c => [c.k, c.h.charAt(0) + c.h.slice(1).toLowerCase()]));
 const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', nvRecep:'', pallet:'', pallets:'', conforme:'', obs:''});
@@ -456,12 +457,18 @@ function buildHead() {
   const r1 = `<tr class="r1"><th class="c-act" scope="col"><span class="sr">Acciones</span></th>${COLS.map(c =>
     `<th scope="col" data-k="${c.k}" aria-sort="none"><button type="button" class="lbl" data-sort="${c.k}">${esc(c.h)}</button></th>`).join('')}</tr>`;
   const ctl = c => c.type === 'select'
-    ? `<select class="flt" data-fk="${c.k}" aria-label="Filtrar ${esc(c.h)}"><option value="">(todos)</option><option value="__empty">(vacío)</option>${c.opts.filter(Boolean).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}</select>`
-    : `<input class="flt" data-fk="${c.k}" placeholder="filtrar" aria-label="Filtrar ${esc(c.h)}">`;
+    ? `<select class="flt" data-fk="${c.k}" autocomplete="off" aria-label="Filtrar ${esc(c.h)}"><option value="">(todos)</option><option value="__empty">(vacío)</option>${c.opts.filter(Boolean).map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}</select>`
+    : `<input class="flt" data-fk="${c.k}" autocomplete="off" placeholder="filtrar" aria-label="Filtrar ${esc(c.h)}">`;
   const r2 = `<tr class="r2"><th class="c-act"></th>${COLS.map(c => `<th>${ctl(c)}</th>`).join('')}</tr>`;
   const tbl = $('#tbl');
   tbl.style.width = (ACT_W + COLS.reduce((s, c) => s + c.w, 0)) + 'px';
   tbl.innerHTML = `${cg}<thead>${r1}${r2}</thead><tbody id="tbody"></tbody>`;
+  // Algunos navegadores "recuerdan" la última selección de un <select> al
+  // recargar la página, aunque se haya regenerado por completo. Forzamos
+  // que los filtros arranquen siempre vacíos para que una cita nunca quede
+  // escondida por un filtro que nadie activó a propósito.
+  F = {};
+  $$('.flt').forEach(el => { if (el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = ''; });
 }
 function selectHTML(id, cl, v) {
   const o = (cl.opts.includes(v) || v === '') ? cl.opts : [...cl.opts, v];
@@ -481,7 +488,7 @@ function rowHTML(c) {
     if (cl.type === 'date') return `<td class="c-date ${cl.k === 'fechaCita' ? dcls : ''}" title="${esc(fmtDate(v))}">${esc(fmtDate(v))}</td>`;
     return `<td class="c-txt" title="${esc(v)}">${esc(v)}</td>`;
   }).join('');
-  return `<tr data-id="${esc(c.id)}"${closed ? ' class="closed"' : ''}><td class="c-act"><div class="actwrap"><button type="button" class="ib" data-act="edit" aria-label="Editar cita de ${esc(c.cliente)}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>${flagsHTML(a)}</div></td>${tds}</tr>`;
+  return `<tr data-id="${esc(c.id)}"${closed ? ' class="closed"' : ''}><td class="c-act"><div class="actwrap"><button type="button" class="btn sm editbtn" data-act="edit" aria-label="Editar cita de ${esc(c.cliente)}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Editar</button>${flagsHTML(a)}</div></td>${tds}</tr>`;
 }
 function emptyMsg() {
   if (!SESION) return 'Inicia sesión para ver las citas.';
