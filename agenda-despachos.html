@@ -162,6 +162,18 @@ select option{background:var(--surface);color:var(--ink)}
 .wcard .w5{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
 .t-ready{border-left-color:var(--t-ready)} .t-part{border-left-color:var(--t-part)} .t-risk{border-left-color:var(--t-risk)} .t-closed{border-left-color:var(--line);opacity:.7}
 .dots{display:inline-flex;gap:3px}
+
+#month{min-height:100%}
+.mgrid{display:grid;grid-template-columns:repeat(7,1fr);min-width:900px}
+.mweekhead{padding:6px 8px;font-size:12px;font-weight:600;color:var(--ink-2);border-bottom:1px solid var(--line-2);background:var(--surface-2);position:sticky;top:0}
+.mday{border-right:1px solid var(--line-2);border-bottom:1px solid var(--line-2);min-height:100px;padding:5px 6px;display:flex;flex-direction:column;gap:3px;background:var(--surface)}
+.mday.other{background:var(--surface-2);opacity:.55}
+.mday.today{background:var(--accent-soft)}
+.mdnum{font-size:12px;font-weight:600;color:var(--ink-2)}
+.mitem{display:block;width:100%;text-align:left;border:0;border-left:4px solid var(--line);background:var(--surface);color:var(--ink);padding:2px 5px;border-radius:4px;cursor:pointer;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mitem:hover{border-color:var(--accent)}
+.mitem.t-ready{border-left-color:var(--t-ready)} .mitem.t-part{border-left-color:var(--t-part)} .mitem.t-risk{border-left-color:var(--t-risk)} .mitem.t-closed{border-left-color:var(--line);opacity:.7}
+.mmore{font-size:11px;color:var(--ink-2);padding:1px 5px}
 .dot{width:10px;height:10px;border-radius:2px;border:1px solid var(--ink-2);display:inline-block}
 .dot.st-empty{background:transparent;border-style:dashed}
 
@@ -273,11 +285,13 @@ legend{padding:0 6px;font-weight:600}
     <div class="seg" role="group" aria-label="Vista">
       <button type="button" id="vTabla" aria-pressed="true">Tabla</button>
       <button type="button" id="vSemana" aria-pressed="false">Semana</button>
+      <button type="button" id="vMes" aria-pressed="false">Mes</button>
     </div>
   </div>
   <main id="main">
     <table id="tbl"></table>
     <div id="week" hidden></div>
+    <div id="month" hidden></div>
   </main>
 </div>
 
@@ -433,7 +447,7 @@ function estadoCls(v) {
 /* ============ estado de la app ============ */
 let CITAS = [], MASTER = [], USUARIOS = [];
 const AN = new Map();
-let VIEW = 'tabla', QUICK = 'todas', SHOWCLOSED = false, SEARCH = '', F = {}, SORT = {k:'fechaCita', dir:1}, WEEK = 0;
+let VIEW = 'tabla', QUICK = 'todas', SHOWCLOSED = false, SEARCH = '', F = {}, SORT = {k:'fechaCita', dir:1}, WEEK = 0, MONTH = 0;
 let auth = null, db = null;
 let SESION = null, NOMBRE = '', UID = '', ROLE = '', ISADMIN = false;
 let STARTED = false, LOADED = false, BANNER = '', USUARIOS_LISTOS = false;
@@ -598,6 +612,41 @@ function renderWeek(list) {
   }).join('');
 }
 
+/* ============ render: mes ============ */
+function monthMatrix(year, monthIdx) {
+  const first = new Date(year, monthIdx, 1);
+  const start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7));
+  const last = new Date(year, monthIdx + 1, 0);
+  const weeks = Math.ceil((((first.getDay() + 6) % 7) + last.getDate()) / 7);
+  const days = [];
+  for (let i = 0; i < weeks * 7; i++) { const d = new Date(start); d.setDate(start.getDate() + i); days.push(d); }
+  return days;
+}
+function monthItemHTML(c) {
+  const a = AN.get(c.id), closed = c.estado !== 'PENDIENTE';
+  const tone = closed ? 'closed' : (a.flags.includes('late') || a.flags.includes('risk')) ? 'risk' : a.ready ? 'ready' : 'part';
+  return `<button type="button" class="mitem t-${tone}" data-id="${esc(c.id)}" title="${esc(c.horaCita || 's/h')} · ${esc(c.cliente)}"><b>${esc(c.horaCita || 's/h')}</b> ${esc(c.cliente)}</button>`;
+}
+function renderMonth(list) {
+  const base = new Date(); base.setDate(1); base.setMonth(base.getMonth() + MONTH);
+  const year = base.getFullYear(), monthIdx = base.getMonth();
+  const days = monthMatrix(year, monthIdx);
+  const by = {}; list.forEach(c => { if (c.fechaCita) (by[c.fechaCita] ||= []).push(c); });
+  const t = todayISO();
+  $('#wkLabel').textContent = `${MES[monthIdx]} ${year}`;
+  const MAXITEMS = 4;
+  const head = [1,2,3,4,5,6,0].map(i => `<div class="mweekhead">${DIAS[i]}</div>`).join('');
+  const cells = days.map(d => {
+    const iso = isoOf(d);
+    const items = (by[iso] || []).sort((x, y) => (x.horaCita || '99').localeCompare(y.horaCita || '99'));
+    const other = d.getMonth() !== monthIdx;
+    const shown = items.slice(0, MAXITEMS);
+    const more = items.length - shown.length;
+    return `<div class="mday${other ? ' other' : ''}${iso === t ? ' today' : ''}"><span class="mdnum">${d.getDate()}</span>${shown.map(monthItemHTML).join('')}${more > 0 ? `<span class="mmore">+${more} más</span>` : ''}</div>`;
+  }).join('');
+  $('#month').innerHTML = `<div class="mgrid">${head}${cells}</div>`;
+}
+
 /* ============ chips, banner, render general ============ */
 const CHIPDEF = [['todas','Todas'],['late','Atrasadas'],['hoy','Hoy'],['manana','Mañana'],['risk','En riesgo'],['clash','Choques']];
 function buildChips() {
@@ -632,13 +681,15 @@ function renderAll(force) {
   computeAnalysis(); updateChips(); renderBanner();
   const list = visibleList();
   $('#btnClear').hidden = !(Object.values(F).some(Boolean) || SEARCH || QUICK !== 'todas');
-  if (VIEW === 'tabla') renderTable(list); else renderWeek(list);
+  if (VIEW === 'tabla') renderTable(list); else if (VIEW === 'mes') renderMonth(list); else renderWeek(list);
 }
 function setView(v) {
   VIEW = v;
   $('#vTabla').setAttribute('aria-pressed', String(v === 'tabla'));
   $('#vSemana').setAttribute('aria-pressed', String(v === 'semana'));
-  $('#tbl').hidden = v !== 'tabla'; $('#week').hidden = v !== 'semana'; $('#weeknav').hidden = v !== 'semana';
+  $('#vMes').setAttribute('aria-pressed', String(v === 'mes'));
+  $('#tbl').hidden = v !== 'tabla'; $('#week').hidden = v !== 'semana'; $('#month').hidden = v !== 'mes';
+  $('#weeknav').hidden = v === 'tabla';
   renderAll(true);
 }
 
@@ -1591,9 +1642,11 @@ function bind() {
   $('#btnClear').addEventListener('click', () => { F = {}; SEARCH = ''; QUICK = 'todas'; $('#search').value = ''; $$('.flt').forEach(f => { f.value = ''; }); renderAll(true); });
   $('#vTabla').addEventListener('click', () => setView('tabla'));
   $('#vSemana').addEventListener('click', () => setView('semana'));
-  $('#wPrev').addEventListener('click', () => { WEEK--; renderAll(true); });
-  $('#wNext').addEventListener('click', () => { WEEK++; renderAll(true); });
-  $('#wToday').addEventListener('click', () => { WEEK = 0; renderAll(true); });
+  $('#vMes').addEventListener('click', () => setView('mes'));
+  $('#wPrev').addEventListener('click', () => { if (VIEW === 'mes') MONTH--; else WEEK--; renderAll(true); });
+  $('#wNext').addEventListener('click', () => { if (VIEW === 'mes') MONTH++; else WEEK++; renderAll(true); });
+  $('#wToday').addEventListener('click', () => { WEEK = 0; MONTH = 0; renderAll(true); });
+  $('#month').addEventListener('click', (e) => { const b = e.target.closest('.mitem'); if (b) openCita(b.dataset.id); });
   $('#btnNew').addEventListener('click', () => { if (SESION && can('crearCita')) openCita(null); });
   $('#btnDashboard').addEventListener('click', () => { if (SESION && can('verDashboard')) openDashboard(); });
   $('#btnMaster').addEventListener('click', () => { if (SESION && can('verClientes')) openMaster(); });
