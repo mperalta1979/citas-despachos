@@ -204,6 +204,7 @@ legend{padding:0 6px;font-weight:600}
 .hist.plain ul{margin:0;padding-left:18px}
 .was{text-decoration:line-through}
 .mrow{display:grid;grid-template-columns:170px 150px 1fr 28px;gap:8px;align-items:start;margin-bottom:8px}
+.trow{display:grid;grid-template-columns:120px 190px 130px 1fr 28px;gap:8px;align-items:start;margin-bottom:8px}
 .mtools{display:flex;gap:8px;flex-wrap:wrap}
 .prev{display:grid;grid-template-columns:auto 1fr;gap:4px 14px}
 .prev b{font-variant-numeric:tabular-nums}
@@ -243,6 +244,7 @@ legend{padding:0 6px;font-weight:600}
 @media (max-width:640px){
   .f,.f.s3,.f.s4{grid-column:span 6}
   .mrow{grid-template-columns:1fr 28px} .mrow .m-t{grid-column:1/-1;grid-row:2} .mrow .m-d{grid-column:1/-1;grid-row:3}
+  .trow{grid-template-columns:1fr 28px} .trow .t-nom,.trow .t-tel,.trow .t-ch{grid-column:1/-1}
   .search{width:100%}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -260,6 +262,7 @@ legend{padding:0 6px;font-weight:600}
     <span class="grow"></span>
     <button type="button" class="btn" id="btnDashboard">Dashboard</button>
     <button type="button" class="btn" id="btnMaster">Clientes y destinos</button>
+    <button type="button" class="btn" id="btnTrans">Transportistas</button>
     <button type="button" class="btn" id="btnUsuarios" hidden>Usuarios y roles</button>
     <button type="button" class="btn" id="btnImport">Importar Excel</button>
     <button type="button" class="btn" id="btnExport">Exportar Excel</button>
@@ -267,6 +270,7 @@ legend{padding:0 6px;font-weight:600}
     <span class="me" id="me"></span>
     <button type="button" class="btn ghost" id="btnOut" hidden>Cerrar sesión</button>
     <input type="file" id="fileIn" accept=".xlsx,.xlsm,.xls,.csv" hidden>
+    <input type="file" id="fileInTrans" accept=".xlsx,.xlsm,.xls,.csv" hidden>
   </header>
   <div id="banner" class="banner" hidden></div>
   <div class="toolbar">
@@ -370,6 +374,7 @@ const ROLE_LABEL_BASE = {admin:'Administrador', editor:'Editor', lector:'Lector'
 const PERMS_DEF = [
   {k:'verDashboard', label:'Ver el Dashboard'},
   {k:'verClientes', label:'Ver "Clientes y destinos"'},
+  {k:'verTransportistas', label:'Ver "Transportistas"'},
   {k:'crearCita', label:'Crear citas'},
   {k:'editarCita', label:'Editar citas (incluye cambiar estado y checklist desde la tabla)'},
   {k:'eliminarCita', label:'Eliminar citas'},
@@ -378,12 +383,13 @@ const PERMS_DEF = [
   {k:'exportarExcel', label:'Exportar citas a Excel'},
   {k:'exportarDashboard', label:'Exportar el Dashboard a Excel'},
   {k:'editarClientes', label:'Editar "Clientes y destinos"'},
+  {k:'editarTransportistas', label:'Editar "Transportistas"'},
   {k:'configurarNtfy', label:'Configurar las notificaciones NTFY'},
   {k:'gestionarUsuarios', label:'Gestionar usuarios, roles y permisos'},
 ];
 const DEFAULT_ROLE_PERMS = {
-  editor: {verDashboard:true, verClientes:true, crearCita:true, editarCita:true, eliminarCita:true, registrarEntrega:true, importarExcel:true, exportarExcel:true, exportarDashboard:true, editarClientes:true, configurarNtfy:false, gestionarUsuarios:false},
-  lector: {verDashboard:true, verClientes:true, crearCita:false, editarCita:false, eliminarCita:false, registrarEntrega:false, importarExcel:false, exportarExcel:true, exportarDashboard:true, editarClientes:false, configurarNtfy:false, gestionarUsuarios:false},
+  editor: {verDashboard:true, verClientes:true, verTransportistas:true, crearCita:true, editarCita:true, eliminarCita:true, registrarEntrega:true, importarExcel:true, exportarExcel:true, exportarDashboard:true, editarClientes:true, editarTransportistas:true, configurarNtfy:false, gestionarUsuarios:false},
+  lector: {verDashboard:true, verClientes:true, verTransportistas:true, crearCita:false, editarCita:false, eliminarCita:false, registrarEntrega:false, importarExcel:false, exportarExcel:true, exportarDashboard:true, editarClientes:false, editarTransportistas:false, configurarNtfy:false, gestionarUsuarios:false},
 };
 let ROLES = ['admin', 'editor', 'lector'];
 let ROLE_LABEL = {...ROLE_LABEL_BASE};
@@ -445,7 +451,7 @@ function estadoCls(v) {
 }
 
 /* ============ estado de la app ============ */
-let CITAS = [], MASTER = [], USUARIOS = [];
+let CITAS = [], MASTER = [], MASTERT = [], USUARIOS = [];
 const AN = new Map();
 let VIEW = 'tabla', QUICK = 'todas', SHOWCLOSED = false, SEARCH = '', F = {}, SORT = {k:'fechaCita', dir:1}, WEEK = 0, MONTH = 0;
 let auth = null, db = null;
@@ -773,6 +779,13 @@ function startData() {
     MASTER = snap.docs.map(d => ({n: d.data().cliente || d.id, d: d.data().destinos || [], tel: d.data().telefono || ''})).sort((a, b) => a.n.localeCompare(b.n, 'es'));
     syncDatalists();
   }, () => {}));
+  unsubs.push(db.collection('transportistas').onSnapshot(snap => {
+    MASTERT = snap.docs.map(d => ({
+      rut: d.data().rut || '', n: d.data().nombre || d.id, tel: d.data().telefono || '',
+      ch: (d.data().choferes || []).map(x => ({patente:x.patente || '', patenteRampla:x.patenteRampla || '', nombreCorto:x.nombreCorto || '', nombreCompleto:x.nombreCompleto || '', cedula:x.cedula || ''})),
+    })).sort((a, b) => a.n.localeCompare(b.n, 'es'));
+    syncDatalists();
+  }, () => {}));
   unsubs.push(db.collection('config').doc('roles').onSnapshot(onRolesConfig, () => {}));
   timers.day = setInterval(() => {
     if (todayISO() !== LASTDAY) { LASTDAY = todayISO(); renderAll(); }
@@ -782,7 +795,7 @@ function startData() {
 function stopData() {
   unsubs.forEach(u => u()); unsubs = [];
   clearInterval(timers.day);
-  CITAS = []; MASTER = []; LOADED = false; STARTED = false;
+  CITAS = []; MASTER = []; MASTERT = []; LOADED = false; STARTED = false;
   renderAll(true);
 }
 
@@ -1024,7 +1037,7 @@ function syncDatalists() {
   const set = new Set(MASTER.map(x => x.n));
   CITAS.forEach(c => c.cliente && set.add(c.cliente));
   $('#dl-cli').innerHTML = [...set].sort((a, b) => a.localeCompare(b, 'es')).map(x => `<option value="${esc(x)}">`).join('');
-  const trans = new Set(); CITAS.forEach(c => c.transportista && trans.add(c.transportista));
+  const trans = new Set(MASTERT.map(x => x.n)); CITAS.forEach(c => c.transportista && trans.add(c.transportista));
   $('#dl-trans').innerHTML = [...trans].sort((a, b) => a.localeCompare(b, 'es')).map(x => `<option value="${esc(x)}">`).join('');
 }
 async function saveCita() {
@@ -1272,6 +1285,90 @@ async function saveMaster() {
     await batch.commit();
     closeModal(); toast('Clientes y destinos guardados');
   } catch (e) { showErr(errMsg(e)); }
+}
+
+/* ============ modal: transportistas ============ */
+const choferLine = c => [c.patente || '', c.nombreCorto || '', c.nombreCompleto || '', c.cedula || '', c.patenteRampla || ''].join(' | ');
+function parseChoferLines(txt) {
+  return txt.split('\n').map(s => s.trim()).filter(Boolean).map(line => {
+    const [patente, nombreCorto, nombreCompleto, cedula, patenteRampla] = line.split('|').map(s => (s || '').trim());
+    return {patente: patente || '', nombreCorto: nombreCorto || '', nombreCompleto: nombreCompleto || '', cedula: cedula || '', patenteRampla: patenteRampla || ''};
+  }).filter(c => c.patente || c.nombreCorto || c.nombreCompleto || c.cedula || c.patenteRampla);
+}
+const trow = x => `<div class="trow"><input class="inp t-rut" placeholder="RUT" value="${esc(x.rut || '')}" aria-label="RUT"><input class="inp t-nom" placeholder="Nombre / empresa" value="${esc(x.n)}" aria-label="Nombre o empresa"><input class="inp t-tel" placeholder="Teléfono" value="${esc(x.tel || '')}" aria-label="Teléfono"><textarea class="inp t-ch" rows="2" placeholder="Un chofer por línea: patente | nombre corto | nombre completo | cédula | patente rampla" aria-label="Choferes y patentes">${esc((x.ch || []).map(choferLine).join('\n'))}</textarea><button type="button" class="ib t-x" aria-label="Quitar transportista">✕</button></div>`;
+function readTransportistas() {
+  const by = new Map();
+  $$('.trow').forEach(r => {
+    const n = $('.t-nom', r).value.trim(); if (!n) return;
+    const rut = $('.t-rut', r).value.trim(), tel = $('.t-tel', r).value.trim();
+    const ch = parseChoferLines($('.t-ch', r).value);
+    const key = nrm(rut || n), it = by.get(key);
+    if (it) { ch.forEach(c => it.ch.push(c)); if (!it.rut && rut) it.rut = rut; if (!it.tel && tel) it.tel = tel; }
+    else by.set(key, {rut, n, tel, ch});
+  });
+  return [...by.values()];
+}
+function openTransportistas() {
+  M = {kind:'transportistas'};
+  const rows = MASTERT.length ? MASTERT : [{rut:'', n:'', tel:'', ch:[]}];
+  openSheet('Transportistas',
+    `<p class="muted" style="margin:0">Cada empresa de transporte con su RUT, teléfono y sus choferes/patentes. Al escribir el transportista en una cita se sugiere desde esta lista.</p><div id="trows">${rows.map(trow).join('')}</div><div class="mtools"><button type="button" class="btn" id="tAdd"${can('editarTransportistas') ? '' : ' disabled'}>Agregar transportista</button><button type="button" class="btn" id="tImport"${can('editarTransportistas') ? '' : ' disabled'}>Importar Excel</button></div>`,
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="tSaveM"${can('editarTransportistas') ? '' : ' disabled'}>Guardar</button>`);
+}
+async function saveTransportistas() {
+  const items = readTransportistas(), keepKeys = new Set(items.map(x => nrm(x.rut || x.n)));
+  try {
+    const batch = db.batch();
+    items.forEach(x => batch.set(db.collection('transportistas').doc(slug(x.rut || x.n)), {rut:x.rut || '', nombre:x.n, telefono:x.tel || '', choferes:x.ch || []}));
+    MASTERT.forEach(x => { if (!keepKeys.has(nrm(x.rut || x.n))) batch.delete(db.collection('transportistas').doc(slug(x.rut || x.n))); });
+    await batch.commit();
+    closeModal(); toast('Transportistas guardados');
+  } catch (e) { showErr(errMsg(e)); }
+}
+function transHeaderKey(h) {
+  if (h === 'RUT') return 'rut';
+  if (h === 'NOMBRE') return 'nombre';
+  if (h.includes('PATENTE') && h.includes('RAMPLA')) return 'patenteRampla';
+  if (h.includes('PATENTE')) return 'patente';
+  if (h.includes('CELULAR') || h.includes('TELEFONO') || h.includes('FONO')) return 'telefono';
+  if (h.includes('NOMBRE CORTO')) return 'nombreCorto';
+  if (h.includes('NOMBRE COMPLETO')) return 'nombreCompleto';
+  if (h.includes('CEDULA')) return 'cedula';
+  return null;
+}
+function parseTransportistasXLSX(buf) {
+  if (typeof XLSX === 'undefined') throw new Error('No se cargó el lector de Excel. Revisa tu conexión y recarga la página.');
+  const wb = XLSX.read(buf, {type:'array'});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
+  const hi = rows.findIndex(r => r.some(x => nrmU(x) === 'RUT') && r.some(x => nrmU(x) === 'NOMBRE'));
+  if (hi < 0) throw new Error('No encontré la fila de encabezados. Necesito al menos las columnas RUT y NOMBRE.');
+  const map = {};
+  rows[hi].forEach((h, i) => { const k = transHeaderKey(nrmU(h)); if (k && !(k in map)) map[k] = i; });
+  const byKey = new Map();
+  rows.slice(hi + 1).forEach(r => {
+    const g = k => (k in map ? String(r[map[k]] ?? '').trim() : '');
+    const rut = g('rut'), nombre = g('nombre');
+    if (!rut && !nombre) return;
+    const key = nrm(rut || nombre);
+    let it = byKey.get(key);
+    if (!it) { it = {rut, n: nombre, tel: g('telefono'), ch: []}; byKey.set(key, it); }
+    if (!it.tel && g('telefono')) it.tel = g('telefono');
+    const ch = {patente: g('patente'), patenteRampla: g('patenteRampla'), nombreCorto: g('nombreCorto'), nombreCompleto: g('nombreCompleto'), cedula: g('cedula')};
+    if (ch.patente || ch.nombreCorto || ch.nombreCompleto || ch.cedula || ch.patenteRampla) it.ch.push(ch);
+  });
+  return [...byKey.values()];
+}
+function mergeTransportistasImport(items) {
+  const current = readTransportistas();
+  items.forEach(x => {
+    let it = current.find(y => nrm(y.rut || y.n) === nrm(x.rut || x.n));
+    if (!it) { it = {rut:x.rut, n:x.n, tel:x.tel, ch:[]}; current.push(it); }
+    else { if (!it.rut && x.rut) it.rut = x.rut; if (!it.tel && x.tel) it.tel = x.tel; }
+    x.ch.forEach(c => { if (!it.ch.some(y => nrm(y.patente) === nrm(c.patente) && c.patente)) it.ch.push(c); });
+  });
+  current.sort((a, b) => a.n.localeCompare(b.n, 'es'));
+  $('#trows').innerHTML = current.map(trow).join('');
 }
 
 /* ============ modal: usuarios y roles (solo administradores) ============ */
@@ -1650,6 +1747,7 @@ function bind() {
   $('#btnNew').addEventListener('click', () => { if (SESION && can('crearCita')) openCita(null); });
   $('#btnDashboard').addEventListener('click', () => { if (SESION && can('verDashboard')) openDashboard(); });
   $('#btnMaster').addEventListener('click', () => { if (SESION && can('verClientes')) openMaster(); });
+  $('#btnTrans').addEventListener('click', () => { if (SESION && can('verTransportistas')) openTransportistas(); });
   $('#btnUsuarios').addEventListener('click', () => { if (SESION && (can('gestionarUsuarios') || can('configurarNtfy'))) openUsuarios(); });
   $('#btnImport').addEventListener('click', () => { if (SESION && can('importarExcel')) $('#fileIn').click(); });
   $('#btnExport').addEventListener('click', () => { if (SESION && can('exportarExcel')) exportXLSX(); });
@@ -1657,6 +1755,11 @@ function bind() {
   $('#fileIn').addEventListener('change', async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     try { openImportPreview(f.name, importParse(await f.arrayBuffer())); } catch (err) { toast(err.message || 'No pude leer el archivo.', 'err'); }
+  });
+  $('#fileInTrans').addEventListener('change', async e => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try { mergeTransportistasImport(parseTransportistasXLSX(await f.arrayBuffer())); toast('Datos importados: revisa y pulsa Guardar.'); }
+    catch (err) { toast(err.message || 'No pude leer el archivo.', 'err'); }
   });
   $('#loginForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -1682,6 +1785,9 @@ function bind() {
     else if (id === 'mFill') mergeFromCitas();
     else if (id === 'mSaveM') saveMaster();
     else if (id === 'mImport') runImport();
+    else if (id === 'tAdd') { $('#trows').insertAdjacentHTML('beforeend', trow({rut:'', n:'', tel:'', ch:[]})); $$('.t-nom').pop().focus(); }
+    else if (id === 'tImport') $('#fileInTrans').click();
+    else if (id === 'tSaveM') saveTransportistas();
     else if (id === 'dfClear') { DASHF = {desde:'', hasta:'', transportista:'', q:''}; $('#mBody').innerHTML = `${dashFiltersHTML()}<div id="dashStats"></div>`; renderDashboardStats(); }
     else if (id === 'dfExport' && can('exportarDashboard')) exportDashboardXLSX();
     else if (id === 'uAdd') crearUsuarioForm();
@@ -1690,6 +1796,7 @@ function bind() {
     else if (id === 'rSave' && can('gestionarUsuarios')) guardarRolesForm();
     else if (e.target.closest('.rrmv') && can('gestionarUsuarios')) quitarRolForm(e.target.closest('.rrmv').dataset.role);
     else if (e.target.closest('.m-x')) e.target.closest('.mrow').remove();
+    else if (e.target.closest('.t-x')) e.target.closest('.trow').remove();
     else if (e.target.dataset.act === 'uborrar') eliminarUsuarioForm(e.target.dataset.uid);
     else if (e.target.dataset.act === 'ureset') restablecerClaveForm(e.target.dataset.uid);
   });
@@ -1731,6 +1838,7 @@ function renderMe() {
   $('#btnUsuarios').hidden = !(can('gestionarUsuarios') || can('configurarNtfy'));
   $('#btnDashboard').hidden = !can('verDashboard');
   $('#btnMaster').hidden = !can('verClientes');
+  $('#btnTrans').hidden = !can('verTransportistas');
   $('#btnExport').hidden = !can('exportarExcel');
   $('#btnNew').disabled = !can('crearCita'); $('#btnImport').disabled = !can('importarExcel');
 }
