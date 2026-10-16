@@ -208,6 +208,13 @@ legend{padding:0 6px;font-weight:600}
 .ranklist{margin:0;padding-left:18px;font-size:12px;color:var(--ink)}
 .ranklist li{margin:6px 0}
 .ranklist .muted{font-size:11px}
+.rtablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+.rtable{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}
+.rtable th,.rtable td{border-bottom:1px solid var(--line-2);padding:7px 10px;text-align:center}
+.rtable thead th{background:var(--surface-2);font-weight:600;position:relative}
+.rtable td.rperm{text-align:left;white-space:normal;min-width:200px;color:var(--ink-2)}
+.rtable .rrmv{width:18px;height:18px;margin-left:4px;border:0;background:transparent;color:var(--ink-2);cursor:pointer;vertical-align:middle;border-radius:4px}
+.rtable .rrmv:hover{background:var(--bad-bg);color:var(--bad-ink)}
 .pwdwrap{position:relative;display:flex}
 .pwdwrap .inp{padding-right:36px}
 .pwdtoggle{position:absolute;right:3px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:0;background:transparent;color:var(--ink-2);cursor:pointer;display:inline-grid;place-items:center;border-radius:5px}
@@ -339,8 +346,38 @@ const fmtTS = t => { const d = new Date(millisOf(t)); return isNaN(d) ? '' : `${
 const shortName = n => n || 'sistema';
 const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-const ROLES = ['admin', 'editor', 'lector'];
-const ROLE_LABEL = {admin:'Administrador', editor:'Editor', lector:'Lector'};
+/* ============ roles y permisos ============ */
+// Los 3 roles base no se pueden borrar ni renombrar. Se pueden agregar roles
+// nuevos (ver "Roles y permisos"), cada uno con su propia combinación de
+// permisos. El rol admin siempre tiene todos los permisos (no es editable ni
+// se guarda en Firestore) para que nunca se pueda quedar la app sin nadie
+// que la administre.
+const ROLE_LABEL_BASE = {admin:'Administrador', editor:'Editor', lector:'Lector'};
+const PERMS_DEF = [
+  {k:'verDashboard', label:'Ver el Dashboard'},
+  {k:'verClientes', label:'Ver "Clientes y destinos"'},
+  {k:'crearCita', label:'Crear citas'},
+  {k:'editarCita', label:'Editar citas (incluye cambiar estado y checklist desde la tabla)'},
+  {k:'eliminarCita', label:'Eliminar citas'},
+  {k:'registrarEntrega', label:'Registrar el resultado de la entrega'},
+  {k:'importarExcel', label:'Importar citas desde Excel'},
+  {k:'exportarExcel', label:'Exportar citas a Excel'},
+  {k:'exportarDashboard', label:'Exportar el Dashboard a Excel'},
+  {k:'editarClientes', label:'Editar "Clientes y destinos"'},
+  {k:'configurarNtfy', label:'Configurar las notificaciones NTFY'},
+  {k:'gestionarUsuarios', label:'Gestionar usuarios, roles y permisos'},
+];
+const DEFAULT_ROLE_PERMS = {
+  editor: {verDashboard:true, verClientes:true, crearCita:true, editarCita:true, eliminarCita:true, registrarEntrega:true, importarExcel:true, exportarExcel:true, exportarDashboard:true, editarClientes:true, configurarNtfy:false, gestionarUsuarios:false},
+  lector: {verDashboard:true, verClientes:true, crearCita:false, editarCita:false, eliminarCita:false, registrarEntrega:false, importarExcel:false, exportarExcel:true, exportarDashboard:true, editarClientes:false, configurarNtfy:false, gestionarUsuarios:false},
+};
+let ROLES = ['admin', 'editor', 'lector'];
+let ROLE_LABEL = {...ROLE_LABEL_BASE};
+let ROLE_PERMS = {editor:{...DEFAULT_ROLE_PERMS.editor}, lector:{...DEFAULT_ROLE_PERMS.lector}};
+function can(action) {
+  if (ROLE === 'admin') return true; // el admin siempre puede todo, pase lo que pase en la tabla
+  return !!(ROLE_PERMS[ROLE] && ROLE_PERMS[ROLE][action]);
+}
 const ENTREGA_PUNTUALIDAD = ['A tiempo', 'Anticipada', 'Atrasada'];
 const ENTREGA_PRESENTE = ['Sí, alguien recibió', 'No se presentó nadie (no-show)'];
 const ENTREGA_CARGA = ['Conforme', 'Con diferencia de cantidad', 'Con daño o avería', 'Rechazo parcial'];
@@ -398,7 +435,7 @@ let CITAS = [], MASTER = [], USUARIOS = [];
 const AN = new Map();
 let VIEW = 'tabla', QUICK = 'todas', SHOWCLOSED = false, SEARCH = '', F = {}, SORT = {k:'fechaCita', dir:1}, WEEK = 0;
 let auth = null, db = null;
-let SESION = null, NOMBRE = '', UID = '', ROLE = '', CANWRITE = false, ISADMIN = false;
+let SESION = null, NOMBRE = '', UID = '', ROLE = '', ISADMIN = false;
 let STARTED = false, LOADED = false, BANNER = '', USUARIOS_LISTOS = false;
 let LASTDAY = todayISO(), deferred = false, M = null, lastFocus = null;
 let timers = {}, unsubs = [];
@@ -507,7 +544,7 @@ function buildHead() {
 }
 function selectHTML(id, cl, v) {
   const o = (cl.opts.includes(v) || v === '') ? cl.opts : [...cl.opts, v];
-  return `<select class="cellsel" data-id="${esc(id)}" data-k="${cl.k}" aria-label="${esc(cl.h)}"${CANWRITE ? '' : ' disabled'}>${o.map(x => `<option value="${esc(x)}"${x === v ? ' selected' : ''}>${x === '' ? '—' : esc(x)}</option>`).join('')}</select>`;
+  return `<select class="cellsel" data-id="${esc(id)}" data-k="${cl.k}" aria-label="${esc(cl.h)}"${can('editarCita') ? '' : ' disabled'}>${o.map(x => `<option value="${esc(x)}"${x === v ? ' selected' : ''}>${x === '' ? '—' : esc(x)}</option>`).join('')}</select>`;
 }
 function flagsHTML(a) {
   const t = esc(a.reasons.join(' · '));
@@ -685,6 +722,7 @@ function startData() {
     MASTER = snap.docs.map(d => ({n: d.data().cliente || d.id, d: d.data().destinos || [], tel: d.data().telefono || ''})).sort((a, b) => a.n.localeCompare(b.n, 'es'));
     syncDatalists();
   }, () => {}));
+  unsubs.push(db.collection('config').doc('roles').onSnapshot(onRolesConfig, () => {}));
   timers.day = setInterval(() => {
     if (todayISO() !== LASTDAY) { LASTDAY = todayISO(); renderAll(); }
     checkRecordatorioDiario();
@@ -886,11 +924,11 @@ function openCita(id, preset) {
     ${c ? histHTML(c) : ''}
     ${c ? `<div class="fh">Última modificación: <b>${esc(shortName(c.modificadoPor))}</b> · ${fmtTS(c.modificadoEn)}</div>` : ''}`;
   const foot = `
-    ${id ? `<span id="delWrap"><button type="button" class="btn" id="mDel"${CANWRITE ? '' : ' disabled'}>Eliminar</button></span><span id="delAsk" hidden>¿Eliminar esta cita? <button type="button" class="btn danger" id="mDelYes">Sí, eliminar</button> <button type="button" class="btn" id="mDelNo">No</button></span>` : ''}
-    ${id ? '<button type="button" class="btn" id="mDup">Duplicar</button>' : ''}
+    ${id ? `<span id="delWrap"><button type="button" class="btn" id="mDel"${can('eliminarCita') ? '' : ' disabled'}>Eliminar</button></span><span id="delAsk" hidden>¿Eliminar esta cita? <button type="button" class="btn danger" id="mDelYes">Sí, eliminar</button> <button type="button" class="btn" id="mDelNo">No</button></span>` : ''}
+    ${(id && can('crearCita')) ? '<button type="button" class="btn" id="mDup">Duplicar</button>' : ''}
     <span class="grow"></span>
     <button type="button" class="btn" id="mCancel">Cancelar</button>
-    <button type="button" class="btn primary" id="mSave"${CANWRITE ? '' : ' disabled'}>${id ? 'Guardar cambios' : 'Crear cita'}</button>`;
+    <button type="button" class="btn primary" id="mSave"${(id ? can('editarCita') : can('crearCita')) ? '' : ' disabled'}>${id ? 'Guardar cambios' : 'Crear cita'}</button>`;
   openSheet(id ? 'Editar cita' : 'Nueva cita', body, foot);
   fillDirList($('[data-f=cliente]').value);
   colorSelects(); updateHint();
@@ -983,7 +1021,7 @@ function openResultadoEntrega(id, valor, selEl) {
       <label class="f s6"><span class="fl">Observaciones</span><textarea class="inp" data-f="eObs" rows="2">${esc(e0.obs || '')}</textarea></label>`;
   }
   openSheet('Resultado de la entrega', body,
-    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="eSave"${CANWRITE ? '' : ' disabled'}>Guardar</button>`);
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="eSave"${can('registrarEntrega') ? '' : ' disabled'}>Guardar</button>`);
 }
 async function saveEntregaForm() {
   const {id, valor} = M;
@@ -1137,7 +1175,7 @@ function openDashboard() {
   M = {kind:'dashboard'};
   DASHF = {desde:'', hasta:'', transportista:'', q:''};
   openSheet('Dashboard', `${dashFiltersHTML()}<div id="dashStats"></div>`,
-    `<button type="button" class="btn" id="dfExport">Exportar a Excel</button><span class="grow"></span><button type="button" class="btn" id="mCancel">Cerrar</button>`);
+    `<button type="button" class="btn" id="dfExport"${can('exportarDashboard') ? '' : ' disabled'}>Exportar a Excel</button><span class="grow"></span><button type="button" class="btn" id="mCancel">Cerrar</button>`);
   $('.sheet').classList.add('wide');
   renderDashboardStats();
 }
@@ -1160,8 +1198,8 @@ function openMaster() {
   M = {kind:'master'};
   const rows = MASTER.length ? MASTER : [{n:'', d:[], tel:''}];
   openSheet('Clientes y destinos',
-    `<p class="muted" style="margin:0">Cada cliente con sus destinos de despacho y un teléfono o contacto de referencia. Al crear una cita los eliges de una lista en vez de escribirlos.</p><div id="mrows">${rows.map(mrow).join('')}</div><div class="mtools"><button type="button" class="btn" id="mAdd"${CANWRITE ? '' : ' disabled'}>Agregar cliente</button><button type="button" class="btn" id="mFill">Traer desde las citas</button></div>`,
-    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="mSaveM"${CANWRITE ? '' : ' disabled'}>Guardar</button>`);
+    `<p class="muted" style="margin:0">Cada cliente con sus destinos de despacho y un teléfono o contacto de referencia. Al crear una cita los eliges de una lista en vez de escribirlos.</p><div id="mrows">${rows.map(mrow).join('')}</div><div class="mtools"><button type="button" class="btn" id="mAdd"${can('editarClientes') ? '' : ' disabled'}>Agregar cliente</button><button type="button" class="btn" id="mFill">Traer desde las citas</button></div>`,
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="mSaveM"${can('editarClientes') ? '' : ' disabled'}>Guardar</button>`);
 }
 function mergeFromCitas() {
   const items = readMaster();
@@ -1205,8 +1243,66 @@ async function loadNtfyConfig() {
   try { const s = await db.collection('config').doc('ntfy').get(); return s.exists ? s.data() : {}; }
   catch (e) { return {}; }
 }
+/* ============ roles y permisos: config/roles en Firestore ============ */
+function onRolesConfig(snap) {
+  const data = snap.exists ? snap.data() : {};
+  const custom = data.roles || {};
+  const customKeys = Object.keys(custom).filter(k => k !== 'admin' && k !== 'editor' && k !== 'lector').sort((a, b) => (custom[a].label || a).localeCompare(custom[b].label || b, 'es'));
+  ROLES = ['admin', 'editor', 'lector', ...customKeys];
+  ROLE_LABEL = {...ROLE_LABEL_BASE};
+  ROLE_PERMS = {
+    editor: {...DEFAULT_ROLE_PERMS.editor, ...(custom.editor && custom.editor.perms)},
+    lector: {...DEFAULT_ROLE_PERMS.lector, ...(custom.lector && custom.lector.perms)},
+  };
+  customKeys.forEach(k => { ROLE_LABEL[k] = custom[k].label || k; ROLE_PERMS[k] = {...custom[k].perms}; });
+  if (M && M.kind === 'usuarios') { ROLESEDIT = buildRolesEdit(); const el = $('#rolesTableWrap'); if (el) el.innerHTML = rolesTableHTML(); refreshUsuariosList(); }
+  renderMe(); renderAll(true);
+}
+function buildRolesEdit() {
+  const custom = ROLES.filter(r => r !== 'admin' && r !== 'editor' && r !== 'lector');
+  const order = ['editor', 'lector', ...custom];
+  return {
+    order,
+    labels: Object.fromEntries(order.map(r => [r, ROLE_LABEL[r] || r])),
+    perms: Object.fromEntries(order.map(r => [r, {...(ROLE_PERMS[r] || {})}])),
+  };
+}
+function rolesTableHTML() {
+  const roles = ['admin', ...ROLESEDIT.order];
+  const head = roles.map(r => `<th>${esc(r === 'admin' ? 'Administrador' : ROLESEDIT.labels[r])}${(r !== 'admin' && r !== 'editor' && r !== 'lector') ? `<button type="button" class="ib rrmv" data-role="${esc(r)}" aria-label="Quitar rol ${esc(ROLESEDIT.labels[r])}" title="Quitar rol">✕</button>` : ''}</th>`).join('');
+  const rows = PERMS_DEF.map(p => `<tr><td class="rperm">${esc(p.label)}</td>${roles.map(r => `<td class="rchk">${r === 'admin'
+    ? '<input type="checkbox" checked disabled aria-label="Siempre activo para Administrador">'
+    : `<input type="checkbox" data-role="${esc(r)}" data-perm="${p.k}" aria-label="${esc(p.label)} — ${esc(ROLESEDIT.labels[r])}"${ROLESEDIT.perms[r][p.k] ? ' checked' : ''}${can('gestionarUsuarios') ? '' : ' disabled'}>`
+  }</td>`).join('')}</tr>`).join('');
+  return `<div class="rtablewrap"><table class="rtable"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function agregarRolForm() {
+  const input = $('#rNuevoRol'), label = input.value.trim();
+  if (!label) return toast('Indica el nombre del rol.', 'err');
+  let key = nrm(label).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || ('rol-' + Date.now().toString(36).slice(-4));
+  if (ROLES.includes(key) || ROLESEDIT.order.includes(key)) key += '-' + Date.now().toString(36).slice(-4);
+  ROLESEDIT.order.push(key); ROLESEDIT.labels[key] = label;
+  ROLESEDIT.perms[key] = Object.fromEntries(PERMS_DEF.map(p => [p.k, false]));
+  input.value = '';
+  $('#rolesTableWrap').innerHTML = rolesTableHTML();
+}
+function quitarRolForm(key) {
+  if (USUARIOS.some(u => u.rol === key)) return toast(`No puedes quitar el rol "${ROLESEDIT.labels[key] || key}": hay usuarios con ese rol. Cámbiales el rol primero.`, 'err');
+  ROLESEDIT.order = ROLESEDIT.order.filter(r => r !== key);
+  delete ROLESEDIT.labels[key]; delete ROLESEDIT.perms[key];
+  $('#rolesTableWrap').innerHTML = rolesTableHTML();
+}
+async function guardarRolesForm() {
+  const roles = {};
+  ROLESEDIT.order.forEach(r => { roles[r] = {label: ROLESEDIT.labels[r], perms: {...ROLESEDIT.perms[r]}}; });
+  const btn = $('#rSave'); if (btn) btn.disabled = true;
+  try { await db.collection('config').doc('roles').set({roles}); toast('Permisos guardados'); }
+  catch (e) { toast(errMsg(e), 'err'); } finally { if (btn) btn.disabled = false; }
+}
+let ROLESEDIT = buildRolesEdit();
 function openUsuarios() {
   M = {kind:'usuarios'};
+  ROLESEDIT = buildRolesEdit();
   openSheet('Usuarios y roles',
     `<div id="uList"></div>
      <fieldset><legend>Agregar usuario</legend>
@@ -1215,7 +1311,16 @@ function openUsuarios() {
          <label class="f s3"><span class="fl">Contraseña</span><input class="inp" type="text" id="uPass" placeholder="Mínimo 4 caracteres"></label>
          <label class="f s3"><span class="fl">Rol</span><select class="inp" id="uRol">${ROLES.map(r => `<option value="${r}">${ROLE_LABEL[r]}</option>`).join('')}</select></label>
        </div>
-       <p class="fh" style="margin:8px 0 0">Admin: todo, incluido este panel. Editor: crea y edita citas. Lector: solo puede ver. Avísale a la persona su nombre y clave; para cambiarla, un administrador usa "Restablecer clave" en su fila.</p>
+       <p class="fh" style="margin:8px 0 0">Avísale a la persona su nombre y clave; para cambiarla, alguien con permiso usa "Restablecer clave" en su fila.</p>
+     </fieldset>
+     <fieldset><legend>Roles y permisos</legend>
+       <p class="fh" style="margin:0 0 8px">El rol Administrador siempre tiene todo (no es editable, para que nunca se quede la app sin nadie que la administre). Los roles Editor y Lector no se pueden borrar ni renombrar, pero sus permisos sí. Esto solo controla qué se ve y qué se puede tocar dentro de la app.</p>
+       <div id="rolesTableWrap">${rolesTableHTML()}</div>
+       <div class="mtools" style="margin-top:10px">
+         <input class="inp" id="rNuevoRol" placeholder="Nombre del rol nuevo (ej: Supervisor)" style="max-width:240px"${can('gestionarUsuarios') ? '' : ' disabled'}>
+         <button type="button" class="btn" id="rAddRol"${can('gestionarUsuarios') ? '' : ' disabled'}>Agregar rol</button>
+         <button type="button" class="btn primary" id="rSave"${can('gestionarUsuarios') ? '' : ' disabled'}>Guardar permisos</button>
+       </div>
      </fieldset>
      <fieldset><legend>Notificaciones (NTFY)</legend>
        <div class="grid">
@@ -1223,9 +1328,9 @@ function openUsuarios() {
          <label class="f s3"><span class="fl">Servidor</span><input class="inp" id="nUrl" autocomplete="off" placeholder="https://ntfy.sh"></label>
        </div>
        <p class="fh" style="margin:8px 0 0">Elige un tema largo y difícil de adivinar (cualquiera que lo sepa puede suscribirse). Suscríbete a él en la app de NTFY para recibir los avisos de nueva cita y cita entregada conforme.</p>
-       <div style="margin-top:8px"><button type="button" class="btn" id="nSave"${ISADMIN ? '' : ' disabled'}>Guardar</button></div>
+       <div style="margin-top:8px"><button type="button" class="btn" id="nSave"${can('configurarNtfy') ? '' : ' disabled'}>Guardar</button></div>
      </fieldset>`,
-    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cerrar</button><button type="button" class="btn primary" id="uAdd"${ISADMIN ? '' : ' disabled'}>Crear usuario</button>`);
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cerrar</button><button type="button" class="btn primary" id="uAdd"${can('gestionarUsuarios') ? '' : ' disabled'}>Crear usuario</button>`);
   refreshUsuariosList();
   loadNtfyConfig().then(cfg => { $('#nTopic').value = cfg.topic || ''; $('#nUrl').value = cfg.url || ''; });
 }
@@ -1359,7 +1464,7 @@ function openImportPreview(name, res) {
   const warn = res.missing.length ? `<div class="hint warn">No encontré estas columnas: ${res.missing.join(', ')}. Se importarán vacías.</div>` : '';
   openSheet('Importar desde Excel',
     `<div class="prev"><span class="muted">Archivo</span><b>${esc(name)}</b><span class="muted">Filas leídas</span><b>${res.total}</b><span class="muted">Citas nuevas</span><b>${res.rows.length}</b><span class="muted">Ya existentes (se omiten)</span><b>${res.dup}</b><span class="muted">Sin fecha de cita</span><b>${res.nodate}</b></div>${warn}<p class="muted" style="margin:0" id="impMsg">Se considera repetida una fila con el mismo cliente, NV, fecha y hora. Al importar no se envía un aviso por cada cita: llega un solo resumen a NTFY.</p>`,
-    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="mImport"${(res.rows.length && CANWRITE) ? '' : ' disabled'}>Importar ${res.rows.length} citas</button>`);
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="mImport"${(res.rows.length && can('importarExcel')) ? '' : ' disabled'}>Importar ${res.rows.length} citas</button>`);
 }
 async function runImport() {
   const rows = M.res.rows, btn = $('#mImport'), msg = $('#impMsg'); btn.disabled = true;
@@ -1489,12 +1594,12 @@ function bind() {
   $('#wPrev').addEventListener('click', () => { WEEK--; renderAll(true); });
   $('#wNext').addEventListener('click', () => { WEEK++; renderAll(true); });
   $('#wToday').addEventListener('click', () => { WEEK = 0; renderAll(true); });
-  $('#btnNew').addEventListener('click', () => { if (SESION && CANWRITE) openCita(null); });
-  $('#btnDashboard').addEventListener('click', () => { if (SESION) openDashboard(); });
-  $('#btnMaster').addEventListener('click', () => { if (SESION) openMaster(); });
-  $('#btnUsuarios').addEventListener('click', () => { if (SESION && ISADMIN) openUsuarios(); });
-  $('#btnImport').addEventListener('click', () => { if (SESION && CANWRITE) $('#fileIn').click(); });
-  $('#btnExport').addEventListener('click', exportXLSX);
+  $('#btnNew').addEventListener('click', () => { if (SESION && can('crearCita')) openCita(null); });
+  $('#btnDashboard').addEventListener('click', () => { if (SESION && can('verDashboard')) openDashboard(); });
+  $('#btnMaster').addEventListener('click', () => { if (SESION && can('verClientes')) openMaster(); });
+  $('#btnUsuarios').addEventListener('click', () => { if (SESION && (can('gestionarUsuarios') || can('configurarNtfy'))) openUsuarios(); });
+  $('#btnImport').addEventListener('click', () => { if (SESION && can('importarExcel')) $('#fileIn').click(); });
+  $('#btnExport').addEventListener('click', () => { if (SESION && can('exportarExcel')) exportXLSX(); });
   $('#btnOut').addEventListener('click', cerrarSesion);
   $('#fileIn').addEventListener('change', async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
@@ -1525,9 +1630,12 @@ function bind() {
     else if (id === 'mSaveM') saveMaster();
     else if (id === 'mImport') runImport();
     else if (id === 'dfClear') { DASHF = {desde:'', hasta:'', transportista:'', q:''}; $('#mBody').innerHTML = `${dashFiltersHTML()}<div id="dashStats"></div>`; renderDashboardStats(); }
-    else if (id === 'dfExport') exportDashboardXLSX();
+    else if (id === 'dfExport' && can('exportarDashboard')) exportDashboardXLSX();
     else if (id === 'uAdd') crearUsuarioForm();
     else if (id === 'nSave') guardarNtfyForm();
+    else if (id === 'rAddRol' && can('gestionarUsuarios')) agregarRolForm();
+    else if (id === 'rSave' && can('gestionarUsuarios')) guardarRolesForm();
+    else if (e.target.closest('.rrmv') && can('gestionarUsuarios')) quitarRolForm(e.target.closest('.rrmv').dataset.role);
     else if (e.target.closest('.m-x')) e.target.closest('.mrow').remove();
     else if (e.target.dataset.act === 'uborrar') eliminarUsuarioForm(e.target.dataset.uid);
     else if (e.target.dataset.act === 'ureset') restablecerClaveForm(e.target.dataset.uid);
@@ -1542,6 +1650,10 @@ function bind() {
   ov.addEventListener('change', e => {
     if (M && M.kind === 'usuarios' && e.target.classList.contains('usel')) cambiarRolForm(e.target.dataset.uid, e.target.value);
     if (M && M.kind === 'dashboard' && ['dfDesde', 'dfHasta', 'dfTrans'].includes(e.target.id)) { syncDashFiltersFromDOM(); renderDashboardStats(); }
+    if (M && M.kind === 'usuarios' && e.target.matches('.rtable input[type=checkbox][data-role]')) {
+      const {role, perm} = e.target.dataset;
+      if (ROLESEDIT.perms[role]) ROLESEDIT.perms[role][perm] = e.target.checked;
+    }
   });
   document.addEventListener('visibilitychange', () => { /* Firestore mantiene la conexión en segundo plano */ });
   document.addEventListener('click', e => {
@@ -1563,8 +1675,11 @@ function renderMe() {
     ? `<span class="av" aria-hidden="true">${esc(NOMBRE.charAt(0).toUpperCase())}</span><span>${esc(NOMBRE)}</span>${ROLE ? `<span class="role${ISADMIN ? ' admin' : ''}">${esc(ROLE_LABEL[ROLE] || ROLE)}</span>` : ''}`
     : '';
   $('#btnOut').hidden = !NOMBRE;
-  $('#btnUsuarios').hidden = !ISADMIN;
-  $('#btnNew').disabled = !CANWRITE; $('#btnImport').disabled = !CANWRITE;
+  $('#btnUsuarios').hidden = !(can('gestionarUsuarios') || can('configurarNtfy'));
+  $('#btnDashboard').hidden = !can('verDashboard');
+  $('#btnMaster').hidden = !can('verClientes');
+  $('#btnExport').hidden = !can('exportarExcel');
+  $('#btnNew').disabled = !can('crearCita'); $('#btnImport').disabled = !can('importarExcel');
 }
 function showLogin() { $('#login').hidden = false; refreshLoginUserList(); }
 function hideLogin() { $('#login').hidden = true; }
@@ -1584,13 +1699,13 @@ async function intentarLogin(uid, password) {
 }
 function aplicarSesion(u, hash) {
   SESION = {uid: u.id}; NOMBRE = u.nombre; UID = u.id; ROLE = u.rol;
-  ISADMIN = ROLE === 'admin'; CANWRITE = ROLE === 'admin' || ROLE === 'editor';
+  ISADMIN = ROLE === 'admin';
   try { localStorage.setItem(SESION_KEY, JSON.stringify({uid: u.id, hash})); } catch (e) {}
   BANNER = ''; hideLogin(); renderMe();
   if (!STARTED) { STARTED = true; startData(); } else renderAll(true);
 }
 function cerrarSesion() {
-  SESION = null; NOMBRE = ''; UID = ''; ROLE = ''; CANWRITE = false; ISADMIN = false;
+  SESION = null; NOMBRE = ''; UID = ''; ROLE = ''; ISADMIN = false;
   try { localStorage.removeItem(SESION_KEY); } catch (e) {}
   renderMe(); if (STARTED) stopData(); showLogin(); setSync('off', 'Sin sesión'); renderAll(true);
 }
@@ -1615,7 +1730,7 @@ function onUsuarios(snap) {
     const yo = USUARIOS.find(u => u.id === UID);
     if (!yo) { toast('Se quitó tu acceso.', 'err'); cerrarSesion(); return; }
     ROLE = yo.rol; NOMBRE = yo.nombre;
-    ISADMIN = ROLE === 'admin'; CANWRITE = ROLE === 'admin' || ROLE === 'editor';
+    ISADMIN = ROLE === 'admin';
     renderMe(); renderAll(true);
   }
 }
