@@ -191,7 +191,7 @@ legend{padding:0 6px;font-weight:600}
 .hist li{margin:3px 0}
 .hist.plain ul{margin:0;padding-left:18px}
 .was{text-decoration:line-through}
-.mrow{display:grid;grid-template-columns:200px 1fr 28px;gap:8px;align-items:start;margin-bottom:8px}
+.mrow{display:grid;grid-template-columns:170px 150px 1fr 28px;gap:8px;align-items:start;margin-bottom:8px}
 .mtools{display:flex;gap:8px;flex-wrap:wrap}
 .prev{display:grid;grid-template-columns:auto 1fr;gap:4px 14px}
 .prev b{font-variant-numeric:tabular-nums}
@@ -205,6 +205,9 @@ legend{padding:0 6px;font-weight:600}
 .legend2{list-style:none;margin:0;padding:0;font-size:12px;color:var(--ink-2)}
 .legend2 li{display:flex;align-items:center;gap:6px;margin:4px 0}
 .dot2{width:10px;height:10px;border-radius:3px;flex:none}
+.ranklist{margin:0;padding-left:18px;font-size:12px;color:var(--ink)}
+.ranklist li{margin:6px 0}
+.ranklist .muted{font-size:11px}
 .pwdwrap{position:relative;display:flex}
 .pwdwrap .inp{padding-right:36px}
 .pwdtoggle{position:absolute;right:3px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:0;background:transparent;color:var(--ink-2);cursor:pointer;display:inline-grid;place-items:center;border-radius:5px}
@@ -220,7 +223,7 @@ legend{padding:0 6px;font-weight:600}
 
 @media (max-width:640px){
   .f,.f.s3,.f.s4{grid-column:span 6}
-  .mrow{grid-template-columns:1fr 28px} .mrow .m-d{grid-column:1/-1;grid-row:2}
+  .mrow{grid-template-columns:1fr 28px} .mrow .m-t{grid-column:1/-1;grid-row:2} .mrow .m-d{grid-column:1/-1;grid-row:3}
   .search{width:100%}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -294,6 +297,7 @@ legend{padding:0 6px;font-weight:600}
 </div>
 <datalist id="dl-cli"></datalist>
 <datalist id="dl-dir"></datalist>
+<datalist id="dl-trans"></datalist>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -360,6 +364,7 @@ const COLS = [
   {k:'fechaCita',h:'FECHA CITA', type:'date', w:106},
   {k:'horaCita', h:'HORA CITA', type:'time', w:80},
   {k:'direccion',h:'DIRECCIÓN DE DESPACHO', type:'text', w:300},
+  {k:'transportista', h:'TRANSPORTISTA', type:'text', w:150},
   {k:'nvRecep',  h:'NV RECEP. EN DESPACHO', type:'select', opts:['','SI','NO','N/A'], w:132},
   {k:'pallet',   h:'PALLETIZADO Y ETIQUETADO', type:'select', opts:['','PREPARADO','EN PREPARACIÓN','N/A'], w:170},
   {k:'pallets',  h:'PALLETS Y BULTOS', type:'text', w:160},
@@ -368,7 +373,7 @@ const COLS = [
 const ACT_W = 220;
 const FIELDS = COLS.map(c => c.k);
 const LABEL = Object.fromEntries(COLS.map(c => [c.k, c.h.charAt(0) + c.h.slice(1).toLowerCase()]));
-const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', nvRecep:'', pallet:'', pallets:'', conforme:'', obs:''});
+const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', transportista:'', nvRecep:'', pallet:'', pallets:'', conforme:'', obs:''});
 const fromDoc = snap => ({...blank(), ...snap.data(), id:snap.id});
 const CHECK = [
   {k:'nvRecep', label:'NV recepcionada en despacho', risk:'NV sin recepcionar en despacho (no se podría despachar a tiempo)'},
@@ -637,17 +642,53 @@ async function ntfyEnviar(titulo, mensaje, tags = [], prioridad = 3) {
   }
 }
 
+/* ============ recordatorio diario: citas hoy/mañana con checklist incompleto ============ */
+async function checkRecordatorioDiario() {
+  if (!LOADED || new Date().getHours() < 8) return; // recién desde las 8:00
+  const hoy = todayISO();
+  try {
+    let debeEnviar = false;
+    await db.runTransaction(async tx => {
+      const ref = db.collection('config').doc('recordatorioDiario');
+      const snap = await tx.get(ref);
+      if (snap.exists && snap.data().fecha === hoy) return; // ya se envió hoy (lo hizo otra sesión)
+      debeEnviar = true;
+      tx.set(ref, {fecha: hoy, enviadoEn: firebase.firestore.FieldValue.serverTimestamp()});
+    });
+    if (!debeEnviar) return;
+    const pendientes = CITAS.filter(c => {
+      const a = AN.get(c.id);
+      return a && c.estado === 'PENDIENTE' && !a.ready && (a.days === 0 || a.days === 1);
+    });
+    if (!pendientes.length) return;
+    const linea = c => `${c.horaCita || 's/h'} · ${c.cliente || '(sin cliente)'} — ${AN.get(c.id).pending.map(p => p.label).join(', ')}`;
+    const deHoy = pendientes.filter(c => AN.get(c.id).days === 0), deManana = pendientes.filter(c => AN.get(c.id).days === 1);
+    const partes = [];
+    if (deHoy.length) partes.push(`HOY (${deHoy.length}):`, ...deHoy.map(linea));
+    if (deManana.length) partes.push(`MAÑANA (${deManana.length}):`, ...deManana.map(linea));
+    ntfyEnviar(
+      `Checklist pendiente: ${pendientes.length} ${pendientes.length === 1 ? 'cita' : 'citas'} por preparar`,
+      partes.join('\n'),
+      ['warning'], 4
+    ).catch(() => {});
+  } catch (e) { console.warn('No se pudo verificar el recordatorio diario', e); }
+}
+
 /* ============ datos: Firestore en tiempo real ============ */
 function startData() {
   setSync('wait');
   unsubs.push(db.collection('citas').orderBy('fechaCita').onSnapshot(snap => {
     CITAS = snap.docs.map(fromDoc); LOADED = true; setSync('ok'); syncDatalists(); renderAll();
+    checkRecordatorioDiario();
   }, err => { setSync('err'); if (!LOADED) { BANNER = errMsg(err); renderAll(true); } }));
   unsubs.push(db.collection('clientesDestinos').onSnapshot(snap => {
-    MASTER = snap.docs.map(d => ({n: d.data().cliente || d.id, d: d.data().destinos || []})).sort((a, b) => a.n.localeCompare(b.n, 'es'));
+    MASTER = snap.docs.map(d => ({n: d.data().cliente || d.id, d: d.data().destinos || [], tel: d.data().telefono || ''})).sort((a, b) => a.n.localeCompare(b.n, 'es'));
     syncDatalists();
   }, () => {}));
-  timers.day = setInterval(() => { if (todayISO() !== LASTDAY) { LASTDAY = todayISO(); renderAll(); } }, 60000);
+  timers.day = setInterval(() => {
+    if (todayISO() !== LASTDAY) { LASTDAY = todayISO(); renderAll(); }
+    checkRecordatorioDiario();
+  }, 60000);
 }
 function stopData() {
   unsubs.forEach(u => u()); unsubs = [];
@@ -756,17 +797,17 @@ async function saveResultadoEntrega(id, valor, entregaObj) {
   }
 }
 async function learnMaster(rows) {
-  const byKey = new Map(MASTER.map(x => [nrm(x.n), {n:x.n, d:[...x.d]}])), touched = new Set();
+  const byKey = new Map(MASTER.map(x => [nrm(x.n), {n:x.n, d:[...x.d], tel:x.tel || ''}])), touched = new Set();
   rows.forEach(r => {
     const n = (r.cliente || '').trim(); if (!n) return;
     const key = nrm(n); let it = byKey.get(key);
-    if (!it) { it = {n, d:[]}; byKey.set(key, it); touched.add(key); }
+    if (!it) { it = {n, d:[], tel:''}; byKey.set(key, it); touched.add(key); }
     const dir = (r.direccion || '').trim();
     if (dir && !it.d.some(x => nrm(x) === nrm(dir))) { it.d.push(dir); touched.add(key); }
   });
   if (!touched.size) return;
   const batch = db.batch();
-  touched.forEach(key => { const it = byKey.get(key); batch.set(db.collection('clientesDestinos').doc(slug(it.n)), {cliente:it.n, destinos:it.d}); });
+  touched.forEach(key => { const it = byKey.get(key); batch.set(db.collection('clientesDestinos').doc(slug(it.n)), {cliente:it.n, destinos:it.d, telefono:it.tel || ''}); });
   await batch.commit();
 }
 
@@ -820,7 +861,7 @@ function openCita(id, preset) {
   const body = `
     <div class="grid">
       <label class="f"><span class="fl">Estado</span>${sel('estado', optsOf('estado'), v.estado)}</label>
-      <label class="f s3"><span class="fl">Cliente</span>${inp('cliente', v.cliente, 'list="dl-cli" autocomplete="off"')}</label>
+      <label class="f s3"><span class="fl">Cliente</span>${inp('cliente', v.cliente, 'list="dl-cli" autocomplete="off"')}<span class="fh" id="cliTel"></span></label>
       <label class="f"><span class="fl">Nº de cita</span>${inp('nroCita', v.nroCita, 'placeholder="S/N si no aplica"')}</label>
       <label class="f"><span class="fl">Fecha de la cita</span>${inp('fechaCita', v.fechaCita, 'type="date"')}</label>
       <label class="f"><span class="fl">Hora</span>${inp('horaCita', v.horaCita, 'type="time"')}</label>
@@ -828,6 +869,7 @@ function openCita(id, preset) {
       <label class="f s6"><span class="fl">Dirección de despacho</span>${inp('direccion', v.direccion, 'list="dl-dir" autocomplete="off" placeholder="Elige un destino del cliente o escribe uno nuevo"')}</label>
       <label class="f s3"><span class="fl">OC</span>${inp('oc', v.oc, 'placeholder="Varias separadas por ;"')}</label>
       <label class="f s3"><span class="fl">NV</span>${inp('nv', v.nv, 'placeholder="Varias separadas por ;"')}</label>
+      <label class="f s3"><span class="fl">Transportista</span>${inp('transportista', v.transportista, 'list="dl-trans" autocomplete="off"')}</label>
     </div>
     <fieldset><legend>Preparación del despacho</legend>
       <div class="grid">
@@ -887,11 +929,14 @@ function fillDirList(cliente) {
   CITAS.forEach(c => { if (c.direccion && nrm(c.cliente) === n) set.add(c.direccion); });
   if (!set.size) { MASTER.forEach(x => (x.d || []).forEach(y => set.add(y))); CITAS.forEach(c => c.direccion && set.add(c.direccion)); }
   $('#dl-dir').innerHTML = [...set].sort().map(x => `<option value="${esc(x)}">`).join('');
+  const tel = $('#cliTel'); if (tel) tel.textContent = (m && m.tel) ? `Tel./contacto: ${m.tel}` : '';
 }
 function syncDatalists() {
   const set = new Set(MASTER.map(x => x.n));
   CITAS.forEach(c => c.cliente && set.add(c.cliente));
   $('#dl-cli').innerHTML = [...set].sort((a, b) => a.localeCompare(b, 'es')).map(x => `<option value="${esc(x)}">`).join('');
+  const trans = new Set(); CITAS.forEach(c => c.transportista && trans.add(c.transportista));
+  $('#dl-trans').innerHTML = [...trans].sort((a, b) => a.localeCompare(b, 'es')).map(x => `<option value="${esc(x)}">`).join('');
 }
 async function saveCita() {
   const d = readForm();
@@ -979,13 +1024,52 @@ function dashBlock(title, obj, emptyNote) {
   const legend = parts.map(p => `<li><i class="dot2" style="background:${p.color}"></i>${esc(p.label)} — <b>${p.v}</b> (${Math.round(p.v / totalN * 100)}%)</li>`).join('');
   return `<div class="dashcard"><h3>${esc(title)}</h3><div class="pie" style="background:${pieCSS(parts)}"></div><ul class="legend2">${legend}</ul></div>`;
 }
-function computeDashboardStats() {
-  const recibida = {'Recibida conforme':0, 'Recibida no conforme':0, 'Aún sin registrar':0};
+const MESES3 = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function monthLabel(ym) { const [y, m] = ym.split('-'); return `${MESES3[+m - 1]} ${y.slice(2)}`; }
+function lineSVG(points) {
+  const W = 620, H = 180, padL = 32, padR = 14, padT = 16, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB, n = points.length;
+  const xAt = i => padL + (n === 1 ? plotW / 2 : (plotW * i / (n - 1)));
+  const yAt = pct => padT + plotH - (plotH * pct / 100);
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(p.pct).toFixed(1)}`).join(' ');
+  const grid = [0, 50, 100].map(v => `<line x1="${padL}" y1="${yAt(v).toFixed(1)}" x2="${W - padR}" y2="${yAt(v).toFixed(1)}" stroke="var(--line-2)" stroke-width="1"/><text x="${padL - 6}" y="${(yAt(v) + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="var(--ink-2)">${v}%</text>`).join('');
+  const dots = points.map((p, i) => `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(p.pct).toFixed(1)}" r="3.5" fill="#1565C0"><title>${esc(p.label)}: ${p.pct}% conforme (${p.conforme} de ${p.conforme + p.noConforme} con resultado)</title></circle>`).join('');
+  const labels = points.map((p, i) => `<text x="${xAt(i).toFixed(1)}" y="${H - 6}" font-size="9" text-anchor="middle" fill="var(--ink-2)">${esc(p.label)}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Evolución mensual del % de citas conformes">${grid}<path d="${path}" fill="none" stroke="#1565C0" stroke-width="2"/>${dots}${labels}</svg>`;
+}
+function evolucionHTML(points) {
+  if (!points.length) return `<div class="dashcard" style="grid-column:1/-1"><h3>Evolución mensual (% conforme)</h3><p class="muted" style="margin:0">Aún no hay suficientes citas con resultado registrado para mostrar una tendencia.</p></div>`;
+  return `<div class="dashcard" style="grid-column:1/-1"><h3>Evolución mensual (% conforme)</h3>${lineSVG(points)}</div>`;
+}
+function rankingHTML(rows) {
+  if (!rows.length) return `<div class="dashcard"><h3>Clientes con más problemas de entrega</h3><p class="muted" style="margin:0">Sin novedades en el período filtrado.</p></div>`;
+  const items = rows.map(r => `<li><b>${esc(r.cliente)}</b> — ${r.total} ${r.total === 1 ? 'problema' : 'problemas'}<br><span class="muted">No conforme: ${r.noConforme} · Atrasos: ${r.atraso} · Choques: ${r.choque}</span></li>`).join('');
+  return `<div class="dashcard"><h3>Clientes con más problemas de entrega</h3><ol class="ranklist">${items}</ol></div>`;
+}
+/* ============ dashboard: filtros y cálculo (reactivo) ============ */
+let DASHF = {desde:'', hasta:'', transportista:'', q:''};
+function filterCitasForDashboard() {
+  return CITAS.filter(c => {
+    if (DASHF.desde && (!c.fechaCita || c.fechaCita < DASHF.desde)) return false;
+    if (DASHF.hasta && (!c.fechaCita || c.fechaCita > DASHF.hasta)) return false;
+    if (DASHF.transportista && nrm(c.transportista || '') !== nrm(DASHF.transportista)) return false;
+    if (DASHF.q) {
+      const q = nrm(DASHF.q);
+      if (!nrm(c.cliente || '').includes(q) && !nrm(c.direccion || '').includes(q)) return false;
+    }
+    return true;
+  });
+}
+function computeDashboardStats(list) {
+  const estado = {'Recibida conforme':0, 'Recibida no conforme':0, 'Atrasada':0, 'Pendiente (en plazo)':0};
   const punt = {}, carga = {}, doc = {}, motivo = {};
-  CITAS.forEach(c => {
-    if (c.conforme === 'SI') recibida['Recibida conforme']++;
-    else if (c.conforme === 'NO') recibida['Recibida no conforme']++;
-    else recibida['Aún sin registrar']++;
+  const porCliente = new Map(), porMes = new Map();
+  list.forEach(c => {
+    const a = AN.get(c.id) || {flags:[]};
+    if (c.conforme === 'SI') estado['Recibida conforme']++;
+    else if (c.conforme === 'NO') estado['Recibida no conforme']++;
+    else if (c.estado === 'PENDIENTE' && a.flags.includes('late')) estado['Atrasada']++;
+    else if (c.estado === 'PENDIENTE') estado['Pendiente (en plazo)']++;
     if (c.conforme === 'SI' && c.entrega) {
       const e = c.entrega;
       if (e.puntualidad) punt[e.puntualidad] = (punt[e.puntualidad] || 0) + 1;
@@ -993,42 +1077,90 @@ function computeDashboardStats() {
       if (e.documento) doc[e.documento] = (doc[e.documento] || 0) + 1;
     }
     if (c.conforme === 'NO' && c.entrega && c.entrega.motivo) motivo[c.entrega.motivo] = (motivo[c.entrega.motivo] || 0) + 1;
+    const esAtraso = c.estado === 'PENDIENTE' && a.flags.includes('late');
+    const esChoque = c.estado === 'PENDIENTE' && a.flags.includes('clash');
+    if (c.conforme === 'NO' || esAtraso || esChoque) {
+      const cli = c.cliente || '(sin cliente)';
+      if (!porCliente.has(cli)) porCliente.set(cli, {cliente:cli, noConforme:0, atraso:0, choque:0});
+      const r = porCliente.get(cli);
+      if (c.conforme === 'NO') r.noConforme++;
+      if (esAtraso) r.atraso++;
+      if (esChoque) r.choque++;
+    }
+    if (isISO(c.fechaCita)) {
+      const mes = c.fechaCita.slice(0, 7);
+      if (!porMes.has(mes)) porMes.set(mes, {mes, conforme:0, noConforme:0});
+      const m = porMes.get(mes);
+      if (c.conforme === 'SI') m.conforme++;
+      else if (c.conforme === 'NO') m.noConforme++;
+    }
   });
-  return {total:CITAS.length, recibida, punt, carga, doc, motivo};
+  const ranking = [...porCliente.values()].map(r => ({...r, total:r.noConforme + r.atraso + r.choque})).sort((a, b) => b.total - a.total).slice(0, 10);
+  const evolucion = [...porMes.values()].filter(m => (m.conforme + m.noConforme) > 0).sort((a, b) => a.mes.localeCompare(b.mes)).slice(-12)
+    .map(m => ({label:monthLabel(m.mes), mesISO:m.mes, conforme:m.conforme, noConforme:m.noConforme, pct:Math.round(m.conforme / (m.conforme + m.noConforme) * 100)}));
+  return {total:list.length, estado, punt, carga, doc, motivo, ranking, evolucion};
 }
-function openDashboard() {
-  M = {kind:'dashboard'};
-  const s = computeDashboardStats();
-  const body = `
-    <p class="muted" style="margin:0 0 4px">Basado en ${s.total} ${s.total === 1 ? 'cita registrada' : 'citas registradas'}.</p>
+function dashFiltersHTML() {
+  const transOpts = [...new Set(CITAS.map(c => c.transportista).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+  return `<div class="grid" style="margin-bottom:10px">
+      <label class="f"><span class="fl">Desde</span><input class="inp" type="date" id="dfDesde" value="${esc(DASHF.desde)}"></label>
+      <label class="f"><span class="fl">Hasta</span><input class="inp" type="date" id="dfHasta" value="${esc(DASHF.hasta)}"></label>
+      <label class="f"><span class="fl">Transportista</span><select class="inp" id="dfTrans"><option value="">(todos)</option>${transOpts.map(t => `<option value="${esc(t)}"${t === DASHF.transportista ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+      <label class="f s3"><span class="fl">Cliente o destino</span><input class="inp" id="dfQ" autocomplete="off" placeholder="Buscar cliente o dirección" value="${esc(DASHF.q)}"></label>
+    </div>
+    <button type="button" class="btn" id="dfClear" style="margin-bottom:14px">Limpiar filtros</button>`;
+}
+function dashStatsHTML(s) {
+  return `
+    <p class="muted" style="margin:0 0 10px">Basado en ${s.total} ${s.total === 1 ? 'cita' : 'citas'} según los filtros.</p>
     <div class="dashgrid">
-      ${dashBlock('Recibida', s.recibida)}
+      ${dashBlock('Estado', s.estado)}
       ${dashBlock('Puntualidad de la entrega', s.punt, 'Aún no hay citas recibidas conformes con el resultado registrado.')}
       ${dashBlock('Estado de la carga recibida', s.carga, 'Aún no hay citas recibidas conformes con el resultado registrado.')}
       ${dashBlock('Documento de entrega', s.doc, 'Aún no hay citas recibidas conformes con el resultado registrado.')}
       ${dashBlock('Motivos de no conformidad', s.motivo, 'Aún no hay citas marcadas como no recibidas.')}
+      ${rankingHTML(s.ranking)}
+      ${evolucionHTML(s.evolucion)}
     </div>`;
-  openSheet('Dashboard', body, `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cerrar</button>`);
+}
+function syncDashFiltersFromDOM() {
+  DASHF.desde = $('#dfDesde') ? $('#dfDesde').value : '';
+  DASHF.hasta = $('#dfHasta') ? $('#dfHasta').value : '';
+  DASHF.transportista = $('#dfTrans') ? $('#dfTrans').value : '';
+  DASHF.q = $('#dfQ') ? $('#dfQ').value : '';
+}
+function renderDashboardStats() {
+  const el = $('#dashStats'); if (!el) return;
+  el.innerHTML = dashStatsHTML(computeDashboardStats(filterCitasForDashboard()));
+}
+function openDashboard() {
+  M = {kind:'dashboard'};
+  DASHF = {desde:'', hasta:'', transportista:'', q:''};
+  openSheet('Dashboard', `${dashFiltersHTML()}<div id="dashStats"></div>`,
+    `<button type="button" class="btn" id="dfExport">Exportar a Excel</button><span class="grow"></span><button type="button" class="btn" id="mCancel">Cerrar</button>`);
   $('.sheet').classList.add('wide');
+  renderDashboardStats();
 }
 
 /* ============ modal: clientes y destinos ============ */
-const mrow = x => `<div class="mrow"><input class="inp m-n" placeholder="Cliente" value="${esc(x.n)}" aria-label="Cliente"><textarea class="inp m-d" rows="2" placeholder="Un destino por línea" aria-label="Destinos">${esc((x.d || []).join('\n'))}</textarea><button type="button" class="ib m-x" aria-label="Quitar cliente">✕</button></div>`;
+const mrow = x => `<div class="mrow"><input class="inp m-n" placeholder="Cliente" value="${esc(x.n)}" aria-label="Cliente"><input class="inp m-t" placeholder="Teléfono o contacto" value="${esc(x.tel || '')}" aria-label="Teléfono o contacto"><textarea class="inp m-d" rows="2" placeholder="Un destino por línea" aria-label="Destinos">${esc((x.d || []).join('\n'))}</textarea><button type="button" class="ib m-x" aria-label="Quitar cliente">✕</button></div>`;
 function readMaster() {
   const by = new Map();
   $$('.mrow').forEach(r => {
     const n = $('.m-n', r).value.trim(); if (!n) return;
+    const tel = $('.m-t', r).value.trim();
     const d = $('.m-d', r).value.split('\n').map(s => s.trim()).filter(Boolean);
     const key = nrm(n), it = by.get(key);
-    if (it) d.forEach(x => { if (!it.d.includes(x)) it.d.push(x); }); else by.set(key, {n, d:[...new Set(d)]});
+    if (it) { d.forEach(x => { if (!it.d.includes(x)) it.d.push(x); }); if (tel && !it.tel) it.tel = tel; }
+    else by.set(key, {n, d:[...new Set(d)], tel});
   });
   return [...by.values()];
 }
 function openMaster() {
   M = {kind:'master'};
-  const rows = MASTER.length ? MASTER : [{n:'', d:[]}];
+  const rows = MASTER.length ? MASTER : [{n:'', d:[], tel:''}];
   openSheet('Clientes y destinos',
-    `<p class="muted" style="margin:0">Cada cliente con sus destinos de despacho. Al crear una cita los eliges de una lista en vez de escribirlos.</p><div id="mrows">${rows.map(mrow).join('')}</div><div class="mtools"><button type="button" class="btn" id="mAdd"${CANWRITE ? '' : ' disabled'}>Agregar cliente</button><button type="button" class="btn" id="mFill">Traer desde las citas</button></div>`,
+    `<p class="muted" style="margin:0">Cada cliente con sus destinos de despacho y un teléfono o contacto de referencia. Al crear una cita los eliges de una lista en vez de escribirlos.</p><div id="mrows">${rows.map(mrow).join('')}</div><div class="mtools"><button type="button" class="btn" id="mAdd"${CANWRITE ? '' : ' disabled'}>Agregar cliente</button><button type="button" class="btn" id="mFill">Traer desde las citas</button></div>`,
     `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="mSaveM"${CANWRITE ? '' : ' disabled'}>Guardar</button>`);
 }
 function mergeFromCitas() {
@@ -1046,7 +1178,7 @@ async function saveMaster() {
   const items = readMaster(), keepKeys = new Set(items.map(x => nrm(x.n)));
   try {
     const batch = db.batch();
-    items.forEach(x => batch.set(db.collection('clientesDestinos').doc(slug(x.n)), {cliente:x.n, destinos:x.d}));
+    items.forEach(x => batch.set(db.collection('clientesDestinos').doc(slug(x.n)), {cliente:x.n, destinos:x.d, telefono:x.tel || ''}));
     MASTER.forEach(x => { if (!keepKeys.has(nrm(x.n))) batch.delete(db.collection('clientesDestinos').doc(slug(x.n))); });
     await batch.commit();
     closeModal(); toast('Clientes y destinos guardados');
@@ -1155,6 +1287,7 @@ function headerKey(h) {
   if (h.startsWith('FECHA C')) return 'fechaCita';
   if (h.startsWith('HORA')) return 'horaCita';
   if (h.includes('DIRECCION')) return 'direccion';
+  if (h.includes('TRANSPORT')) return 'transportista';
   if (h.includes('RECEP')) return 'nvRecep';
   if (h.includes('PALLETIZADO')) return 'pallet';
   if (h.includes('BULTOS') || h.startsWith('PALLETS')) return 'pallets';
@@ -1207,6 +1340,7 @@ function importParse(buf) {
     c.oc = String(g('oc') ?? '').trim();
     c.nroCita = String(g('nroCita') ?? '').trim();
     c.direccion = String(g('direccion') ?? '').trim();
+    c.transportista = String(g('transportista') ?? '').trim();
     c.pallets = String(g('pallets') ?? '').trim();
     c.obs = String(g('obs') ?? '').trim();
     c.fechaNV = toISODate(g('fechaNV')); c.fechaCita = toISODate(g('fechaCita')); c.horaCita = toHHMM(g('horaCita'));
@@ -1247,14 +1381,75 @@ async function runImport() {
     closeModal(); toast(`Se importaron ${n} citas`);
   } catch (e) { msg.textContent = `${errMsg(e)} Alcanzó a importar ${n} de ${rows.length}.`; msg.className = 'err-msg'; }
 }
+const ENTREGA_COLS = [
+  {h:'PUNTUALIDAD', k:'puntualidad'},
+  {h:'¿HUBO ALGUIEN PARA RECIBIR?', k:'presente'},
+  {h:'ESTADO CARGA RECIBIDA', k:'carga'},
+  {h:'DIFERENCIA', k:'diferencia'},
+  {h:'DOCUMENTO DE ENTREGA', k:'documento'},
+  {h:'MOTIVO NO CONFORMIDAD', k:'motivo'},
+  {h:'OBS. ENTREGA', k:'obs'},
+];
 function exportXLSX() {
   if (typeof XLSX === 'undefined') return toast('No se cargó el generador de Excel. Recarga la página.', 'err');
   if (!CITAS.length) return toast('No hay citas para exportar.', 'err');
-  const rows = sortList([...CITAS]).map(c => COLS.map(cl => cl.type === 'date' ? fmtDate(c[cl.k]) : (c[cl.k] ?? '')));
-  const ws = XLSX.utils.aoa_to_sheet([COLS.map(c => c.h), ...rows]);
-  ws['!cols'] = COLS.map(c => ({wch:Math.max(10, Math.round(c.w / 7))}));
+  const rows = sortList([...CITAS]).map(c => [
+    ...COLS.map(cl => cl.type === 'date' ? fmtDate(c[cl.k]) : (c[cl.k] ?? '')),
+    ...ENTREGA_COLS.map(ec => (c.entrega && c.entrega[ec.k]) || ''),
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([[...COLS.map(c => c.h), ...ENTREGA_COLS.map(c => c.h)], ...rows]);
+  ws['!cols'] = [...COLS.map(c => ({wch:Math.max(10, Math.round(c.w / 7))})), ...ENTREGA_COLS.map(() => ({wch:16}))];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Citas');
   XLSX.writeFile(wb, `agenda_despachos_${todayISO()}.xlsx`);
+}
+function exportDashboardXLSX() {
+  if (typeof XLSX === 'undefined') return toast('No se cargó el generador de Excel. Recarga la página.', 'err');
+  const list = filterCitasForDashboard();
+  if (!list.length) return toast('No hay citas que coincidan con los filtros para exportar.', 'err');
+  const s = computeDashboardStats(list);
+  const wb = XLSX.utils.book_new();
+
+  const resumen = [
+    ['Dashboard de citas de despacho'],
+    ['Generado', fmtDate(todayISO())],
+    ['Filtro: desde', DASHF.desde ? fmtDate(DASHF.desde) : '(sin filtro)'],
+    ['Filtro: hasta', DASHF.hasta ? fmtDate(DASHF.hasta) : '(sin filtro)'],
+    ['Filtro: transportista', DASHF.transportista || '(todos)'],
+    ['Filtro: cliente o destino', DASHF.q || '(sin filtro)'],
+    ['Total de citas en el período', s.total],
+    [],
+    ['Estado', 'Cantidad'],
+    ...Object.entries(s.estado).filter(([, v]) => v > 0).map(([k, v]) => [k, v]),
+    [],
+    ['Puntualidad de la entrega', 'Cantidad'],
+    ...Object.entries(s.punt).map(([k, v]) => [k, v]),
+    [],
+    ['Estado de la carga recibida', 'Cantidad'],
+    ...Object.entries(s.carga).map(([k, v]) => [k, v]),
+    [],
+    ['Documento de entrega', 'Cantidad'],
+    ...Object.entries(s.doc).map(([k, v]) => [k, v]),
+    [],
+    ['Motivos de no conformidad', 'Cantidad'],
+    ...Object.entries(s.motivo).map(([k, v]) => [k, v]),
+  ];
+  const wsResumen = XLSX.utils.aoa_to_sheet(resumen);
+  wsResumen['!cols'] = [{wch:32}, {wch:18}];
+  XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+
+  const ranking = [['Cliente', 'No conforme', 'Atrasos', 'Choques', 'Total problemas'],
+    ...s.ranking.map(r => [r.cliente, r.noConforme, r.atraso, r.choque, r.total])];
+  const wsRank = XLSX.utils.aoa_to_sheet(ranking);
+  wsRank['!cols'] = [{wch:28}, {wch:12}, {wch:10}, {wch:10}, {wch:16}];
+  XLSX.utils.book_append_sheet(wb, wsRank, 'Ranking clientes');
+
+  const evol = [['Mes', 'Conformes', 'No conformes', '% conforme'],
+    ...s.evolucion.map(m => [m.label, m.conforme, m.noConforme, m.pct])];
+  const wsEvol = XLSX.utils.aoa_to_sheet(evol);
+  wsEvol['!cols'] = [{wch:10}, {wch:12}, {wch:14}, {wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsEvol, 'Evolución mensual');
+
+  XLSX.writeFile(wb, `dashboard_citas_${todayISO()}.xlsx`);
 }
 
 /* ============ eventos ============ */
@@ -1325,10 +1520,12 @@ function bind() {
     else if (id === 'mDelNo') { $('#delWrap').hidden = false; $('#delAsk').hidden = true; }
     else if (id === 'mDelYes') deleteCita();
     else if (id === 'mDup') { const v = readForm(); closeModal(); openCita(null, {cliente:v.cliente, direccion:v.direccion, oc:v.oc, nv:v.nv, fechaNV:v.fechaNV}); toast('Duplicada: completa fecha y hora'); }
-    else if (id === 'mAdd') { $('#mrows').insertAdjacentHTML('beforeend', mrow({n:'', d:[]})); $$('.m-n').pop().focus(); }
+    else if (id === 'mAdd') { $('#mrows').insertAdjacentHTML('beforeend', mrow({n:'', d:[], tel:''})); $$('.m-n').pop().focus(); }
     else if (id === 'mFill') mergeFromCitas();
     else if (id === 'mSaveM') saveMaster();
     else if (id === 'mImport') runImport();
+    else if (id === 'dfClear') { DASHF = {desde:'', hasta:'', transportista:'', q:''}; $('#mBody').innerHTML = `${dashFiltersHTML()}<div id="dashStats"></div>`; renderDashboardStats(); }
+    else if (id === 'dfExport') exportDashboardXLSX();
     else if (id === 'uAdd') crearUsuarioForm();
     else if (id === 'nSave') guardarNtfyForm();
     else if (e.target.closest('.m-x')) e.target.closest('.mrow').remove();
@@ -1340,9 +1537,11 @@ function bind() {
       if (e.target.dataset.f === 'cliente') fillDirList(e.target.value);
       colorSelects(); updateHint();
     }
+    if (M && M.kind === 'dashboard' && e.target.id === 'dfQ') { syncDashFiltersFromDOM(); renderDashboardStats(); }
   });
   ov.addEventListener('change', e => {
     if (M && M.kind === 'usuarios' && e.target.classList.contains('usel')) cambiarRolForm(e.target.dataset.uid, e.target.value);
+    if (M && M.kind === 'dashboard' && ['dfDesde', 'dfHasta', 'dfTrans'].includes(e.target.id)) { syncDashFiltersFromDOM(); renderDashboardStats(); }
   });
   document.addEventListener('visibilitychange', () => { /* Firestore mantiene la conexión en segundo plano */ });
   document.addEventListener('click', e => {
