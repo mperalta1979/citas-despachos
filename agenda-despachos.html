@@ -130,8 +130,9 @@ main{flex:1;min-height:0;overflow:auto;background:var(--surface)}
 #tbl td.st-warn{background:var(--warn-bg);color:var(--warn-ink)}
 #tbl td.st-off{background:var(--surface-2);color:var(--ink-2)}
 #tbl td.st-empty{background:var(--surface)}
-#tbl td.c-sel{padding:0;display:flex;align-items:center}
-#tbl td.c-sel .cellsel{flex:1;width:auto;min-width:0}
+#tbl td.c-sel{padding:0}
+.selwrap{display:flex;align-items:center;height:100%}
+.selwrap .cellsel{flex:1;width:auto;min-width:0}
 .cellsel{width:100%;height:29px;border:0;background:transparent;color:inherit;font:inherit;font-weight:500;text-align:center;text-align-last:center;appearance:none;-webkit-appearance:none;cursor:pointer;padding:0 6px}
 .notabtn{width:22px;height:22px;flex:none;margin-right:2px}
 .notabtn.has{color:var(--accent)}
@@ -589,7 +590,11 @@ function rowHTML(c) {
   if (!closed && a.days !== null) dcls = a.days < 0 ? 'd-late' : a.days <= RISK_DAYS ? 'd-soon' : '';
   const tds = COLS.map(cl => {
     const v = c[cl.k] ?? '';
-    if (cl.type === 'select') return `<td class="c-sel ${cl.k === 'estado' ? estadoCls(v) : stCls(cl.k, v)}">${selectHTML(c.id, cl, v)}${cl.k === 'nvRecep' ? notaNvRecepBtn(c) : ''}</td>`;
+    if (cl.type === 'select') {
+      const cls = cl.k === 'estado' ? estadoCls(v) : stCls(cl.k, v);
+      if (cl.k === 'nvRecep') return `<td class="c-sel ${cls}"><span class="selwrap">${selectHTML(c.id, cl, v)}${notaNvRecepBtn(c)}</span></td>`;
+      return `<td class="c-sel ${cls}">${selectHTML(c.id, cl, v)}</td>`;
+    }
     if (cl.type === 'date') return `<td class="c-date ${cl.k === 'fechaCita' ? dcls : ''}" title="${esc(fmtDate(v))}">${esc(fmtDate(v))}</td>`;
     return `<td class="c-txt" title="${esc(v)}">${esc(v)}</td>`;
   }).join('');
