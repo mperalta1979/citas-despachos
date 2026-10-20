@@ -130,8 +130,11 @@ main{flex:1;min-height:0;overflow:auto;background:var(--surface)}
 #tbl td.st-warn{background:var(--warn-bg);color:var(--warn-ink)}
 #tbl td.st-off{background:var(--surface-2);color:var(--ink-2)}
 #tbl td.st-empty{background:var(--surface)}
-#tbl td.c-sel{padding:0}
+#tbl td.c-sel{padding:0;display:flex;align-items:center}
+#tbl td.c-sel .cellsel{flex:1;width:auto;min-width:0}
 .cellsel{width:100%;height:29px;border:0;background:transparent;color:inherit;font:inherit;font-weight:500;text-align:center;text-align-last:center;appearance:none;-webkit-appearance:none;cursor:pointer;padding:0 6px}
+.notabtn{width:22px;height:22px;flex:none;margin-right:2px}
+.notabtn.has{color:var(--accent)}
 .cellsel:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .cellsel:disabled{cursor:default;opacity:1}
 select option{background:var(--surface);color:var(--ink)}
@@ -370,13 +373,14 @@ const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct
 // permisos. El rol admin siempre tiene todos los permisos (no es editable ni
 // se guarda en Firestore) para que nunca se pueda quedar la app sin nadie
 // que la administre.
-const ROLE_LABEL_BASE = {admin:'Administrador', editor:'Editor', lector:'Lector'};
+const ROLE_LABEL_BASE = {admin:'Administrador', editor:'Editor', lector:'Lector', programador:'Programador'};
 const PERMS_DEF = [
   {k:'verDashboard', label:'Ver el Dashboard'},
   {k:'verClientes', label:'Ver "Clientes y destinos"'},
   {k:'verTransportistas', label:'Ver "Transportistas"'},
   {k:'crearCita', label:'Crear citas'},
   {k:'editarCita', label:'Editar citas (incluye cambiar estado y checklist desde la tabla)'},
+  {k:'editarNvRecep', label:'Marcar "NV recepcionada en despacho" y escribir su nota'},
   {k:'eliminarCita', label:'Eliminar citas'},
   {k:'registrarEntrega', label:'Registrar el resultado de la entrega'},
   {k:'importarExcel', label:'Importar citas desde Excel'},
@@ -388,12 +392,16 @@ const PERMS_DEF = [
   {k:'gestionarUsuarios', label:'Gestionar usuarios, roles y permisos'},
 ];
 const DEFAULT_ROLE_PERMS = {
-  editor: {verDashboard:true, verClientes:true, verTransportistas:true, crearCita:true, editarCita:true, eliminarCita:true, registrarEntrega:true, importarExcel:true, exportarExcel:true, exportarDashboard:true, editarClientes:true, editarTransportistas:true, configurarNtfy:false, gestionarUsuarios:false},
-  lector: {verDashboard:true, verClientes:true, verTransportistas:true, crearCita:false, editarCita:false, eliminarCita:false, registrarEntrega:false, importarExcel:false, exportarExcel:true, exportarDashboard:true, editarClientes:false, editarTransportistas:false, configurarNtfy:false, gestionarUsuarios:false},
+  editor: {verDashboard:true, verClientes:true, verTransportistas:true, crearCita:true, editarCita:true, editarNvRecep:true, eliminarCita:true, registrarEntrega:true, importarExcel:true, exportarExcel:true, exportarDashboard:true, editarClientes:true, editarTransportistas:true, configurarNtfy:false, gestionarUsuarios:false},
+  lector: {verDashboard:true, verClientes:true, verTransportistas:true, crearCita:false, editarCita:false, editarNvRecep:false, eliminarCita:false, registrarEntrega:false, importarExcel:false, exportarExcel:true, exportarDashboard:true, editarClientes:false, editarTransportistas:false, configurarNtfy:false, gestionarUsuarios:false},
+  // Rol pensado para quien agenda/programa despachos: por defecto solo puede marcar si la NV
+  // llegó a despacho y escribir la nota de esa cita. El resto de los permisos quedan apagados
+  // y se activan (si se quiere) desde "Usuarios y roles", igual que con Editor y Lector.
+  programador: {verDashboard:false, verClientes:false, verTransportistas:false, crearCita:false, editarCita:false, editarNvRecep:true, eliminarCita:false, registrarEntrega:false, importarExcel:false, exportarExcel:false, exportarDashboard:false, editarClientes:false, editarTransportistas:false, configurarNtfy:false, gestionarUsuarios:false},
 };
-let ROLES = ['admin', 'editor', 'lector'];
+let ROLES = ['admin', 'editor', 'lector', 'programador'];
 let ROLE_LABEL = {...ROLE_LABEL_BASE};
-let ROLE_PERMS = {editor:{...DEFAULT_ROLE_PERMS.editor}, lector:{...DEFAULT_ROLE_PERMS.lector}};
+let ROLE_PERMS = {editor:{...DEFAULT_ROLE_PERMS.editor}, lector:{...DEFAULT_ROLE_PERMS.lector}, programador:{...DEFAULT_ROLE_PERMS.programador}};
 function can(action) {
   if (ROLE === 'admin') return true; // el admin siempre puede todo, pase lo que pase en la tabla
   return !!(ROLE_PERMS[ROLE] && ROLE_PERMS[ROLE][action]);
@@ -422,7 +430,7 @@ const COLS = [
   {k:'horaCita', h:'HORA CITA', type:'time', w:80},
   {k:'direccion',h:'DIRECCIÓN DE DESPACHO', type:'text', w:300},
   {k:'transportista', h:'TRANSPORTISTA', type:'text', w:150},
-  {k:'nvRecep',  h:'NV RECEP. EN DESPACHO', type:'select', opts:['','SI','NO','N/A'], w:132},
+  {k:'nvRecep',  h:'NV RECEP. EN DESPACHO', type:'select', opts:['','SI','NO','INCOMPLETA','N/A'], w:132},
   {k:'pallet',   h:'PALLETIZADO Y ETIQUETADO', type:'select', opts:['','PREPARADO','EN PREPARACIÓN','N/A'], w:170},
   {k:'pallets',  h:'PALLETS Y BULTOS', type:'text', w:160},
   {k:'obs',      h:'OBSERVACIONES', type:'text', w:260},
@@ -430,7 +438,7 @@ const COLS = [
 const ACT_W = 220;
 const FIELDS = COLS.map(c => c.k);
 const LABEL = Object.fromEntries(COLS.map(c => [c.k, c.h.charAt(0) + c.h.slice(1).toLowerCase()]));
-const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', transportista:'', nvRecep:'', pallet:'', pallets:'', conforme:'', obs:''});
+const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', transportista:'', nvRecep:'', notaNvRecep:'', pallet:'', pallets:'', conforme:'', obs:''});
 const fromDoc = snap => ({...blank(), ...snap.data(), id:snap.id});
 const CHECK = [
   {k:'nvRecep', label:'NV recepcionada en despacho', risk:'NV sin recepcionar en despacho (no se podría despachar a tiempo)'},
@@ -564,7 +572,12 @@ function buildHead() {
 }
 function selectHTML(id, cl, v) {
   const o = (cl.opts.includes(v) || v === '') ? cl.opts : [...cl.opts, v];
-  return `<select class="cellsel" data-id="${esc(id)}" data-k="${cl.k}" aria-label="${esc(cl.h)}"${can('editarCita') ? '' : ' disabled'}>${o.map(x => `<option value="${esc(x)}"${x === v ? ' selected' : ''}>${x === '' ? '—' : esc(x)}</option>`).join('')}</select>`;
+  const editable = cl.k === 'nvRecep' ? (can('editarCita') || can('editarNvRecep')) : can('editarCita');
+  return `<select class="cellsel" data-id="${esc(id)}" data-k="${cl.k}" aria-label="${esc(cl.h)}"${editable ? '' : ' disabled'}>${o.map(x => `<option value="${esc(x)}"${x === v ? ' selected' : ''}>${x === '' ? '—' : esc(x)}</option>`).join('')}</select>`;
+}
+function notaNvRecepBtn(c) {
+  const has = !!(c.notaNvRecep && c.notaNvRecep.trim());
+  return `<button type="button" class="ib notabtn${has ? ' has' : ''}" data-act="nota" data-id="${esc(c.id)}" aria-label="${has ? 'Ver o editar la nota de NV recepcionada' : 'Agregar una nota sobre NV recepcionada'}" title="${esc(has ? c.notaNvRecep : 'Agregar nota')}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>`;
 }
 function flagsHTML(a) {
   const t = esc(a.reasons.join(' · '));
@@ -576,7 +589,7 @@ function rowHTML(c) {
   if (!closed && a.days !== null) dcls = a.days < 0 ? 'd-late' : a.days <= RISK_DAYS ? 'd-soon' : '';
   const tds = COLS.map(cl => {
     const v = c[cl.k] ?? '';
-    if (cl.type === 'select') return `<td class="c-sel ${cl.k === 'estado' ? estadoCls(v) : stCls(cl.k, v)}">${selectHTML(c.id, cl, v)}</td>`;
+    if (cl.type === 'select') return `<td class="c-sel ${cl.k === 'estado' ? estadoCls(v) : stCls(cl.k, v)}">${selectHTML(c.id, cl, v)}${cl.k === 'nvRecep' ? notaNvRecepBtn(c) : ''}</td>`;
     if (cl.type === 'date') return `<td class="c-date ${cl.k === 'fechaCita' ? dcls : ''}" title="${esc(fmtDate(v))}">${esc(fmtDate(v))}</td>`;
     return `<td class="c-txt" title="${esc(v)}">${esc(v)}</td>`;
   }).join('');
@@ -1105,6 +1118,21 @@ async function saveEntregaForm() {
   } catch (e) { showErr(errMsg(e)); btn.disabled = false; }
 }
 
+/* ============ modal: nota de NV recepcionada ============ */
+function openNota(id) {
+  const c = CITAS.find(x => x.id === id); if (!c) return;
+  const editable = can('editarCita') || can('editarNvRecep');
+  M = {kind:'nota', id};
+  openSheet('Nota — NV recepcionada en despacho',
+    `<p class="muted" style="margin:0">${esc(c.cliente || '(sin cliente)')} · ${esc(fmtDate(c.fechaCita))} ${esc(c.horaCita || 's/h')}</p><label class="f s6"><span class="fl">Nota</span><textarea class="inp" id="notaTxt" rows="4"${editable ? '' : ' disabled'} placeholder="Ej: falta la NV 1234, llega en la tarde">${esc(c.notaNvRecep || '')}</textarea></label>`,
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cerrar</button>${editable ? '<button type="button" class="btn primary" id="notaSave">Guardar</button>' : ''}`);
+}
+async function saveNota() {
+  const txt = $('#notaTxt').value.trim(), btn = $('#notaSave'); if (btn) btn.disabled = true;
+  try { await patchCita(M.id, {notaNvRecep: txt}); closeModal(); toast('Nota guardada'); }
+  catch (e) { showErr(errMsg(e)); if (btn) btn.disabled = false; }
+}
+
 /* ============ dashboard ============ */
 function pieCSS(parts) {
   const total = parts.reduce((s, p) => s + p.v, 0);
@@ -1395,20 +1423,21 @@ async function loadNtfyConfig() {
 function onRolesConfig(snap) {
   const data = snap.exists ? snap.data() : {};
   const custom = data.roles || {};
-  const customKeys = Object.keys(custom).filter(k => k !== 'admin' && k !== 'editor' && k !== 'lector').sort((a, b) => (custom[a].label || a).localeCompare(custom[b].label || b, 'es'));
-  ROLES = ['admin', 'editor', 'lector', ...customKeys];
+  const customKeys = Object.keys(custom).filter(k => k !== 'admin' && k !== 'editor' && k !== 'lector' && k !== 'programador').sort((a, b) => (custom[a].label || a).localeCompare(custom[b].label || b, 'es'));
+  ROLES = ['admin', 'editor', 'lector', 'programador', ...customKeys];
   ROLE_LABEL = {...ROLE_LABEL_BASE};
   ROLE_PERMS = {
     editor: {...DEFAULT_ROLE_PERMS.editor, ...(custom.editor && custom.editor.perms)},
     lector: {...DEFAULT_ROLE_PERMS.lector, ...(custom.lector && custom.lector.perms)},
+    programador: {...DEFAULT_ROLE_PERMS.programador, ...(custom.programador && custom.programador.perms)},
   };
   customKeys.forEach(k => { ROLE_LABEL[k] = custom[k].label || k; ROLE_PERMS[k] = {...custom[k].perms}; });
   if (M && M.kind === 'usuarios') { ROLESEDIT = buildRolesEdit(); const el = $('#rolesTableWrap'); if (el) el.innerHTML = rolesTableHTML(); refreshUsuariosList(); }
   renderMe(); renderAll(true);
 }
 function buildRolesEdit() {
-  const custom = ROLES.filter(r => r !== 'admin' && r !== 'editor' && r !== 'lector');
-  const order = ['editor', 'lector', ...custom];
+  const custom = ROLES.filter(r => r !== 'admin' && r !== 'editor' && r !== 'lector' && r !== 'programador');
+  const order = ['editor', 'lector', 'programador', ...custom];
   return {
     order,
     labels: Object.fromEntries(order.map(r => [r, ROLE_LABEL[r] || r])),
@@ -1417,7 +1446,7 @@ function buildRolesEdit() {
 }
 function rolesTableHTML() {
   const roles = ['admin', ...ROLESEDIT.order];
-  const head = roles.map(r => `<th>${esc(r === 'admin' ? 'Administrador' : ROLESEDIT.labels[r])}${(r !== 'admin' && r !== 'editor' && r !== 'lector') ? `<button type="button" class="ib rrmv" data-role="${esc(r)}" aria-label="Quitar rol ${esc(ROLESEDIT.labels[r])}" title="Quitar rol">✕</button>` : ''}</th>`).join('');
+  const head = roles.map(r => `<th>${esc(r === 'admin' ? 'Administrador' : ROLESEDIT.labels[r])}${(r !== 'admin' && r !== 'editor' && r !== 'lector' && r !== 'programador') ? `<button type="button" class="ib rrmv" data-role="${esc(r)}" aria-label="Quitar rol ${esc(ROLESEDIT.labels[r])}" title="Quitar rol">✕</button>` : ''}</th>`).join('');
   const rows = PERMS_DEF.map(p => `<tr><td class="rperm">${esc(p.label)}</td>${roles.map(r => `<td class="rchk">${r === 'admin'
     ? '<input type="checkbox" checked disabled aria-label="Siempre activo para Administrador">'
     : `<input type="checkbox" data-role="${esc(r)}" data-perm="${p.k}" aria-label="${esc(p.label)} — ${esc(ROLESEDIT.labels[r])}"${ROLESEDIT.perms[r][p.k] ? ' checked' : ''}${can('gestionarUsuarios') ? '' : ' disabled'}>`
@@ -1462,7 +1491,7 @@ function openUsuarios() {
        <p class="fh" style="margin:8px 0 0">Avísale a la persona su nombre y clave; para cambiarla, alguien con permiso usa "Restablecer clave" en su fila.</p>
      </fieldset>
      <fieldset><legend>Roles y permisos</legend>
-       <p class="fh" style="margin:0 0 8px">El rol Administrador siempre tiene todo (no es editable, para que nunca se quede la app sin nadie que la administre). Los roles Editor y Lector no se pueden borrar ni renombrar, pero sus permisos sí. Esto solo controla qué se ve y qué se puede tocar dentro de la app.</p>
+       <p class="fh" style="margin:0 0 8px">El rol Administrador siempre tiene todo (no es editable, para que nunca se quede la app sin nadie que la administre). Los roles Editor, Lector y Programador no se pueden borrar ni renombrar, pero sus permisos sí. Esto solo controla qué se ve y qué se puede tocar dentro de la app.</p>
        <div id="rolesTableWrap">${rolesTableHTML()}</div>
        <div class="mtools" style="margin-top:10px">
          <input class="inp" id="rNuevoRol" placeholder="Nombre del rol nuevo (ej: Supervisor)" style="max-width:240px"${can('gestionarUsuarios') ? '' : ' disabled'}>
@@ -1648,10 +1677,11 @@ function exportXLSX() {
   if (!CITAS.length) return toast('No hay citas para exportar.', 'err');
   const rows = sortList([...CITAS]).map(c => [
     ...COLS.map(cl => cl.type === 'date' ? fmtDate(c[cl.k]) : (c[cl.k] ?? '')),
+    c.notaNvRecep || '',
     ...ENTREGA_COLS.map(ec => (c.entrega && c.entrega[ec.k]) || ''),
   ]);
-  const ws = XLSX.utils.aoa_to_sheet([[...COLS.map(c => c.h), ...ENTREGA_COLS.map(c => c.h)], ...rows]);
-  ws['!cols'] = [...COLS.map(c => ({wch:Math.max(10, Math.round(c.w / 7))})), ...ENTREGA_COLS.map(() => ({wch:16}))];
+  const ws = XLSX.utils.aoa_to_sheet([[...COLS.map(c => c.h), 'NOTA NV RECEP.', ...ENTREGA_COLS.map(c => c.h)], ...rows]);
+  ws['!cols'] = [...COLS.map(c => ({wch:Math.max(10, Math.round(c.w / 7))})), {wch:28}, ...ENTREGA_COLS.map(() => ({wch:16}))];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Citas');
   XLSX.writeFile(wb, `agenda_despachos_${todayISO()}.xlsx`);
 }
@@ -1726,6 +1756,7 @@ function bind() {
     const hi = e.target.closest('[data-act="hist"]'); if (hi) return openHistorial(hi.closest('tr').dataset.id);
     const en = e.target.closest('[data-act="entrega"]');
     if (en) { const rid = en.closest('tr').dataset.id; const cc = CITAS.find(x => x.id === rid); if (cc) openResultadoEntrega(rid, cc.conforme, undefined); return; }
+    const no = e.target.closest('[data-act="nota"]'); if (no) return openNota(no.dataset.id);
     const sortBtn = e.target.closest('[data-sort]');
     if (sortBtn) { const k = sortBtn.dataset.sort; SORT = SORT.k === k ? {k, dir:-SORT.dir} : {k, dir:1}; renderAll(true); }
   });
@@ -1777,6 +1808,7 @@ function bind() {
     if (id === 'mCancel') { const wasEntrega = M && M.kind === 'entrega'; closeModal(); if (wasEntrega) renderAll(true); }
     else if (id === 'mSave') saveCita();
     else if (id === 'eSave') saveEntregaForm();
+    else if (id === 'notaSave') saveNota();
     else if (id === 'mDel') { $('#delWrap').hidden = true; $('#delAsk').hidden = false; }
     else if (id === 'mDelNo') { $('#delWrap').hidden = false; $('#delAsk').hidden = true; }
     else if (id === 'mDelYes') deleteCita();
