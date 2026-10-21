@@ -146,6 +146,7 @@ select option{background:var(--surface);color:var(--ink)}
 .f-late{background:var(--late-bg);color:var(--late-ink)}
 .f-risk{background:var(--bad-bg);color:var(--bad-ink)}
 .f-clash{background:var(--clash-bg);color:var(--clash-ink)}
+.f-sinconfirmar{background:#D32F2F;color:#fff;font-weight:700}
 .f-closed{background:var(--surface-2);color:var(--ink-2)}
 .emptymsg{position:sticky;left:16px;width:min(560px,86vw);padding:36px 0;white-space:normal;color:var(--ink-2)}
 #tbl td.emptycell{height:auto;border:0}
@@ -447,7 +448,15 @@ const CHECK = [
 ];
 const isOk = v => v === 'SI' || v === 'PREPARADO' || v === 'N/A';
 const RISK_DAYS = 2; // días de anticipación para marcar "en riesgo" y pintar la fecha
-const FLAGTXT = {late:'Atrasada', risk:'En riesgo', clash:'Choque'};
+const FLAGTXT = {late:'Atrasada', risk:'En riesgo', clash:'Choque', sinconfirmar:'Sin Confirmar'};
+// Fecha y hora exactas de la cita (si no hay hora, se considera vencida recién al cierre del día).
+function citaMoment(c) {
+  if (!isISO(c.fechaCita)) return null;
+  const d = parseISO(c.fechaCita);
+  const m = /^(\d{1,2}):(\d{2})$/.exec(c.horaCita || '');
+  if (m) d.setHours(+m[1], +m[2], 0, 0); else d.setHours(23, 59, 59, 999);
+  return d;
+}
 
 function stCls(k, v) {
   if (!v) return 'st-empty';
@@ -489,6 +498,13 @@ function analyzeOne(c, othersAtSlot) {
     if (othersAtSlot > 0) {
       a.flags.push('clash');
       a.reasons.push('Otra cita pendiente en el mismo destino, día y hora');
+    }
+    if (!c.conforme) {
+      const dt = citaMoment(c);
+      if (dt && dt.getTime() <= Date.now()) {
+        a.flags.push('sinconfirmar');
+        a.reasons.push('Ya pasó la hora de la cita y la columna "Recibida" sigue vacía');
+      }
     }
   }
   return a;
@@ -618,7 +634,7 @@ function renderTable(list) {
 function mondayOf(iso) { const d = parseISO(iso); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; }
 function cardHTML(c) {
   const a = AN.get(c.id), closed = c.estado !== 'PENDIENTE';
-  const tone = closed ? 'closed' : (a.flags.includes('late') || a.flags.includes('risk')) ? 'risk' : a.ready ? 'ready' : 'part';
+  const tone = closed ? 'closed' : (a.flags.includes('late') || a.flags.includes('risk') || a.flags.includes('sinconfirmar')) ? 'risk' : a.ready ? 'ready' : 'part';
   const dots = CHECK.map(x => `<i class="dot ${stCls(x.k, c[x.k])}" title="${esc(x.label)}: ${esc(c[x.k] || 'sin dato')}"></i>`).join('');
   const nro = c.nroCita && c.nroCita !== 'S/N' ? 'Cita ' + c.nroCita : '';
   return `<button type="button" class="wcard t-${tone}" data-id="${esc(c.id)}"><span class="w1"><b>${esc(c.horaCita || 's/h')}</b><span>${esc(nro)}</span></span><span class="w2">${esc(c.cliente)}</span><span class="w3">${esc(c.direccion)}</span><span class="w4"><span class="dots">${dots}</span><span>${esc(c.pallets)}</span></span>${(a.flags.length || closed) ? `<span class="w5">${flagsHTML(a)}${closed ? `<span class="flag f-closed">${esc(c.estado)}</span>` : ''}</span>` : ''}</button>`;
@@ -648,7 +664,7 @@ function monthMatrix(year, monthIdx) {
 }
 function monthItemHTML(c) {
   const a = AN.get(c.id), closed = c.estado !== 'PENDIENTE';
-  const tone = closed ? 'closed' : (a.flags.includes('late') || a.flags.includes('risk')) ? 'risk' : a.ready ? 'ready' : 'part';
+  const tone = closed ? 'closed' : (a.flags.includes('late') || a.flags.includes('risk') || a.flags.includes('sinconfirmar')) ? 'risk' : a.ready ? 'ready' : 'part';
   return `<button type="button" class="mitem t-${tone}" data-id="${esc(c.id)}" title="${esc(c.horaCita || 's/h')} · ${esc(c.cliente)}"><b>${esc(c.horaCita || 's/h')}</b> ${esc(c.cliente)}</button>`;
 }
 function renderMonth(list) {
@@ -806,7 +822,8 @@ function startData() {
   }, () => {}));
   unsubs.push(db.collection('config').doc('roles').onSnapshot(onRolesConfig, () => {}));
   timers.day = setInterval(() => {
-    if (todayISO() !== LASTDAY) { LASTDAY = todayISO(); renderAll(); }
+    if (todayISO() !== LASTDAY) LASTDAY = todayISO();
+    renderAll(); // también revisa minuto a minuto si alguna cita quedó "Sin Confirmar"
     checkRecordatorioDiario();
   }, 60000);
 }
