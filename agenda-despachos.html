@@ -435,12 +435,13 @@ const COLS = [
   {k:'nvRecep',  h:'NV RECEP. EN DESPACHO', type:'select', opts:['','SI','NO','INCOMPLETA','N/A'], w:132},
   {k:'pallet',   h:'PALLETIZADO Y ETIQUETADO', type:'select', opts:['','PREPARADO','EN PREPARACIÓN','N/A'], w:170},
   {k:'pallets',  h:'PALLETS Y BULTOS', type:'text', w:160},
+  {k:'nroGuia',  h:'NRO. GUÍA', type:'text', w:160},
   {k:'obs',      h:'OBSERVACIONES', type:'text', w:260},
 ];
 const ACT_W = 220;
 const FIELDS = COLS.map(c => c.k);
 const LABEL = Object.fromEntries(COLS.map(c => [c.k, c.h.charAt(0) + c.h.slice(1).toLowerCase()]));
-const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', transportista:'', nvRecep:'', notaNvRecep:'', pallet:'', pallets:'', conforme:'', obs:''});
+const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', transportista:'', nvRecep:'', notaNvRecep:'', pallet:'', pallets:'', nroGuia:'', conforme:'', obs:''});
 const fromDoc = snap => ({...blank(), ...snap.data(), id:snap.id});
 const CHECK = [
   {k:'nvRecep', label:'NV recepcionada en despacho', risk:'NV sin recepcionar en despacho (no se podría despachar a tiempo)'},
@@ -1018,6 +1019,7 @@ function openCita(id, preset) {
     <div class="grid">
       <label class="f s3"><span class="fl">Pallets y bultos</span>${inp('pallets', v.pallets, 'placeholder="Ej: 22 pallets + 28 bultos"')}</label>
       <label class="f s3"><span class="fl">Recibida</span>${sel('conforme', optsOf('conforme'), v.conforme)}<span class="fh">Al pasar a SI se avisa por NTFY que la cita fue entregada conforme.</span></label>
+      <label class="f s3"><span class="fl">Nro. Guía</span>${inp('nroGuia', v.nroGuia, 'placeholder="Varias separadas por ;"')}</label>
       <label class="f s6"><span class="fl">Observaciones</span><textarea class="inp" data-f="obs" rows="2">${esc(v.obs)}</textarea></label>
     </div>
     ${c ? histHTML(c) : ''}
@@ -1595,6 +1597,7 @@ function headerKey(h) {
   if (h.includes('RECEP')) return 'nvRecep';
   if (h.includes('PALLETIZADO')) return 'pallet';
   if (h.includes('BULTOS') || h.startsWith('PALLETS')) return 'pallets';
+  if (h.includes('GUIA')) return 'nroGuia';
   if (h.includes('RECIBIDA') || h.includes('CONFORME')) return 'conforme';
   if (h.startsWith('OBSERV')) return 'obs';
   return null;
@@ -1646,6 +1649,7 @@ function importParse(buf) {
     c.direccion = String(g('direccion') ?? '').trim();
     c.transportista = String(g('transportista') ?? '').trim();
     c.pallets = String(g('pallets') ?? '').trim();
+    c.nroGuia = String(g('nroGuia') ?? '').trim();
     c.obs = String(g('obs') ?? '').trim();
     c.fechaNV = toISODate(g('fechaNV')); c.fechaCita = toISODate(g('fechaCita')); c.horaCita = toHHMM(g('horaCita'));
     ['estado', 'nvRecep', 'pallet', 'conforme'].forEach(k => { c[k] = cleanStatus(g(k)); });
