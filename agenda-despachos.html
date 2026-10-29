@@ -413,6 +413,14 @@ const ENTREGA_PRESENTE = ['Sí, alguien recibió', 'No se presentó nadie (no-sh
 const ENTREGA_CARGA = ['Conforme', 'Con diferencia de cantidad', 'Con daño o avería', 'Rechazo parcial'];
 const ENTREGA_DOC = ['Firmado sin observaciones', 'Firmado con observaciones', 'Sin firma (pendiente de recuperar)'];
 const ENTREGA_MOTIVO_NO = ['Cliente no se presentó / no recibió', 'Cliente rechazó la mercadería', 'Documentación incompleta o incorrecta', 'Mercadería dañada detectada en recepción', 'Fuera de horario de recepción', 'Problema con el vehículo o transporte', 'Otro'];
+const MOTIVO_REPROGRAMADA = ['Solicitud del cliente', 'Solicitud de Logística', 'Solicitud de Área Comercial', 'Olvido de la cita', 'Transportista no disponible / cambio de transportista', 'Mercadería no lista (stock o producción)', 'Cliente no puede recibir en la fecha acordada', 'Documentación pendiente (NV, guía, permisos)', 'Problema de acceso al lugar de despacho', 'Otro'];
+const MOTIVO_CANCELADA = ['Cliente anuló el pedido/compra', 'Solicitud de Logística', 'Solicitud de Área Comercial', 'Olvido de la cita', 'Cita duplicada o creada por error', 'Mercadería no disponible (quiebre de stock)', 'Cliente cambia a retiro propio (Retira Cliente)', 'Se consolidó con otra cita/despacho', 'Problema de crédito / bloqueo comercial', 'Otro'];
+function motivoOptsFor(estado) {
+  if (estado === 'REPROGRAMADA') return MOTIVO_REPROGRAMADA;
+  if (estado === 'CANCELADA') return MOTIVO_CANCELADA;
+  return null;
+}
+const motivoLabelFor = estado => estado === 'REPROGRAMADA' ? 'Motivo de la reprogramación' : 'Motivo de la cancelación';
 const DASH_PALETTE = ['#1565C0', '#2E7D32', '#F9A825', '#C62828', '#6A1B9A', '#00897B', '#8D6E63'];
 async function sha256hex(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -441,7 +449,8 @@ const COLS = [
 const ACT_W = 220;
 const FIELDS = COLS.map(c => c.k);
 const LABEL = Object.fromEntries(COLS.map(c => [c.k, c.h.charAt(0) + c.h.slice(1).toLowerCase()]));
-const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', transportista:'', nvRecep:'', notaNvRecep:'', pallet:'', pallets:'', nroGuia:'', conforme:'', obs:''});
+LABEL.motivoEstado = 'Motivo';
+const blank = () => ({estado:'PENDIENTE', cliente:'', oc:'', nv:'', fechaNV:'', nroCita:'', fechaCita:'', horaCita:'', direccion:'', transportista:'', nvRecep:'', notaNvRecep:'', pallet:'', pallets:'', nroGuia:'', conforme:'', obs:'', motivoEstado:''});
 const fromDoc = snap => ({...blank(), ...snap.data(), id:snap.id});
 const CHECK = [
   {k:'nvRecep', label:'NV recepcionada en despacho', risk:'NV sin recepcionar en despacho (no se podría despachar a tiempo)'},
@@ -999,6 +1008,7 @@ function openCita(id, preset) {
   const body = `
     <div class="grid">
       <label class="f"><span class="fl">Estado</span>${sel('estado', optsOf('estado'), v.estado)}</label>
+      <div class="f s3" id="motivoWrap"${motivoOptsFor(v.estado) ? '' : ' hidden'}>${motivoOptsFor(v.estado) ? `<span class="fl">${motivoLabelFor(v.estado)}</span>${sel('motivoEstado', motivoOptsFor(v.estado), v.motivoEstado)}` : ''}</div>
       <label class="f s3"><span class="fl">Cliente</span>${inp('cliente', v.cliente, 'list="dl-cli" autocomplete="off"')}<span class="fh" id="cliTel"></span></label>
       <label class="f"><span class="fl">Nº de cita</span>${inp('nroCita', v.nroCita, 'placeholder="S/N si no aplica"')}</label>
       <label class="f"><span class="fl">Fecha de la cita</span>${inp('fechaCita', v.fechaCita, 'type="date"')}</label>
@@ -1037,6 +1047,8 @@ function openCita(id, preset) {
 function readForm() {
   const d = {};
   FIELDS.forEach(k => { const el = $(`#mBody [data-f="${k}"]`); d[k] = el ? el.value.trim() : ''; });
+  const mEl = $('#mBody [data-f="motivoEstado"]');
+  d.motivoEstado = mEl ? mEl.value.trim() : '';
   return d;
 }
 function colorSelects() {
@@ -1085,6 +1097,7 @@ async function saveCita() {
   try {
     if (M.id) {
       const patch = {}; FIELDS.forEach(k => { if ((M.orig[k] ?? '') !== d[k]) patch[k] = d[k]; });
+      if ((M.orig.motivoEstado ?? '') !== d.motivoEstado) patch.motivoEstado = d.motivoEstado;
       if (Object.keys(patch).length) await patchCita(M.id, patch);
       learnMaster([d]).catch(() => {});
     } else await createCita(d);
@@ -1094,6 +1107,24 @@ async function saveCita() {
 async function deleteCita() {
   try { await removeCita(M.id); closeModal(); toast('Cita eliminada'); }
   catch (e) { showErr(errMsg(e)); }
+}
+
+/* ============ modal: motivo al reprogramar/cancelar desde la tabla ============ */
+function openMotivoEstado(id, estado, selEl) {
+  const c = CITAS.find(x => x.id === id); if (!c) return;
+  M = {kind:'motivoestado', id, estado, selEl};
+  const opts = motivoOptsFor(estado);
+  openSheet(estado === 'REPROGRAMADA' ? 'Reprogramar cita' : 'Cancelar cita',
+    `<p class="muted" style="margin:0">Cliente: <b>${esc(c.cliente)}</b> · ${esc(fmtDate(c.fechaCita))} ${esc(c.horaCita || '')}</p>
+     <div class="grid"><label class="f s6"><span class="fl">${motivoLabelFor(estado)}</span>${sel('mMotivo', opts, c.estado === estado ? (c.motivoEstado || '') : '')}</label></div>`,
+    `<span class="grow"></span><button type="button" class="btn" id="mCancel">Cancelar</button><button type="button" class="btn primary" id="motivoSave"${can('editarCita') ? '' : ' disabled'}>Guardar</button>`);
+}
+async function saveMotivoEstado() {
+  const motivo = $('#mBody [data-f="mMotivo"]').value.trim();
+  if (!motivo) return showErr('Indica el motivo.');
+  const btn = $('#motivoSave'); if (btn) btn.disabled = true;
+  try { await patchCita(M.id, {estado: M.estado, motivoEstado: motivo}); closeModal(); toast('Cita actualizada'); renderAll(true); }
+  catch (e) { showErr(errMsg(e)); if (btn) btn.disabled = false; }
 }
 
 /* ============ modal: resultado de la entrega ============ */
@@ -1215,13 +1246,15 @@ function filterCitasForDashboard() {
   });
 }
 function computeDashboardStats(list) {
-  const estado = {'Recibida conforme':0, 'Recibida no conforme':0, 'Atrasada':0, 'Pendiente (en plazo)':0};
-  const punt = {}, carga = {}, doc = {}, motivo = {};
+  const estado = {'Recibida conforme':0, 'Recibida no conforme':0, 'Atrasada':0, 'Pendiente (en plazo)':0, 'Reprogramada':0, 'Cancelada':0};
+  const punt = {}, carga = {}, doc = {}, motivo = {}, motivoReprog = {}, motivoCancel = {};
   const porCliente = new Map(), porMes = new Map();
   list.forEach(c => {
     const a = AN.get(c.id) || {flags:[]};
     if (c.conforme === 'SI') estado['Recibida conforme']++;
     else if (c.conforme === 'NO') estado['Recibida no conforme']++;
+    else if (c.estado === 'REPROGRAMADA') estado['Reprogramada']++;
+    else if (c.estado === 'CANCELADA') estado['Cancelada']++;
     else if (c.estado === 'PENDIENTE' && a.flags.includes('late')) estado['Atrasada']++;
     else if (c.estado === 'PENDIENTE') estado['Pendiente (en plazo)']++;
     if (c.conforme === 'SI' && c.entrega) {
@@ -1231,6 +1264,8 @@ function computeDashboardStats(list) {
       if (e.documento) doc[e.documento] = (doc[e.documento] || 0) + 1;
     }
     if (c.conforme === 'NO' && c.entrega && c.entrega.motivo) motivo[c.entrega.motivo] = (motivo[c.entrega.motivo] || 0) + 1;
+    if (c.estado === 'REPROGRAMADA' && c.motivoEstado) motivoReprog[c.motivoEstado] = (motivoReprog[c.motivoEstado] || 0) + 1;
+    if (c.estado === 'CANCELADA' && c.motivoEstado) motivoCancel[c.motivoEstado] = (motivoCancel[c.motivoEstado] || 0) + 1;
     const esAtraso = c.estado === 'PENDIENTE' && a.flags.includes('late');
     const esChoque = c.estado === 'PENDIENTE' && a.flags.includes('clash');
     if (c.conforme === 'NO' || esAtraso || esChoque) {
@@ -1252,7 +1287,7 @@ function computeDashboardStats(list) {
   const ranking = [...porCliente.values()].map(r => ({...r, total:r.noConforme + r.atraso + r.choque})).sort((a, b) => b.total - a.total).slice(0, 10);
   const evolucion = [...porMes.values()].filter(m => (m.conforme + m.noConforme) > 0).sort((a, b) => a.mes.localeCompare(b.mes)).slice(-12)
     .map(m => ({label:monthLabel(m.mes), mesISO:m.mes, conforme:m.conforme, noConforme:m.noConforme, pct:Math.round(m.conforme / (m.conforme + m.noConforme) * 100)}));
-  return {total:list.length, estado, punt, carga, doc, motivo, ranking, evolucion};
+  return {total:list.length, estado, punt, carga, doc, motivo, motivoReprog, motivoCancel, ranking, evolucion};
 }
 function dashFiltersHTML() {
   const transOpts = [...new Set(CITAS.map(c => c.transportista).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
@@ -1273,6 +1308,8 @@ function dashStatsHTML(s) {
       ${dashBlock('Estado de la carga recibida', s.carga, 'Aún no hay citas recibidas conformes con el resultado registrado.')}
       ${dashBlock('Documento de entrega', s.doc, 'Aún no hay citas recibidas conformes con el resultado registrado.')}
       ${dashBlock('Motivos de no conformidad', s.motivo, 'Aún no hay citas marcadas como no recibidas.')}
+      ${dashBlock('Motivos de reprogramación', s.motivoReprog, 'Aún no hay citas reprogramadas con motivo registrado.')}
+      ${dashBlock('Motivos de cancelación', s.motivoCancel, 'Aún no hay citas canceladas con motivo registrado.')}
       ${rankingHTML(s.ranking)}
       ${evolucionHTML(s.evolucion)}
     </div>`;
@@ -1741,6 +1778,12 @@ function exportDashboardXLSX() {
     [],
     ['Motivos de no conformidad', 'Cantidad'],
     ...Object.entries(s.motivo).map(([k, v]) => [k, v]),
+    [],
+    ['Motivos de reprogramación', 'Cantidad'],
+    ...Object.entries(s.motivoReprog).map(([k, v]) => [k, v]),
+    [],
+    ['Motivos de cancelación', 'Cantidad'],
+    ...Object.entries(s.motivoCancel).map(([k, v]) => [k, v]),
   ];
   const wsResumen = XLSX.utils.aoa_to_sheet(resumen);
   wsResumen['!cols'] = [{wch:32}, {wch:18}];
@@ -1770,6 +1813,11 @@ function bind() {
     if (k === 'conforme' && (s.value === 'SI' || s.value === 'NO')) {
       s.blur();
       openResultadoEntrega(id, s.value, s);
+      return;
+    }
+    if (k === 'estado' && (s.value === 'REPROGRAMADA' || s.value === 'CANCELADA')) {
+      s.blur();
+      openMotivoEstado(id, s.value, s);
       return;
     }
     td.className = 'c-sel ' + (k === 'estado' ? estadoCls(s.value) : stCls(k, s.value));
@@ -1827,14 +1875,15 @@ function bind() {
   });
 
   const ov = $('#overlay');
-  $('#mClose').addEventListener('click', () => { const wasEntrega = M && M.kind === 'entrega'; closeModal(); if (wasEntrega) renderAll(true); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !ov.hidden) { const wasEntrega = M && M.kind === 'entrega'; closeModal(); if (wasEntrega) renderAll(true); } });
+  $('#mClose').addEventListener('click', () => { const wasEntrega = M && (M.kind === 'entrega' || M.kind === 'motivoestado'); closeModal(); if (wasEntrega) renderAll(true); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !ov.hidden) { const wasEntrega = M && (M.kind === 'entrega' || M.kind === 'motivoestado'); closeModal(); if (wasEntrega) renderAll(true); } });
   ov.addEventListener('click', e => {
     const id = e.target.id;
-    if (id === 'mCancel') { const wasEntrega = M && M.kind === 'entrega'; closeModal(); if (wasEntrega) renderAll(true); }
+    if (id === 'mCancel') { const wasEntrega = M && (M.kind === 'entrega' || M.kind === 'motivoestado'); closeModal(); if (wasEntrega) renderAll(true); }
     else if (id === 'mSave') saveCita();
     else if (id === 'eSave') saveEntregaForm();
     else if (id === 'notaSave') saveNota();
+    else if (id === 'motivoSave') saveMotivoEstado();
     else if (id === 'mDel') { $('#delWrap').hidden = true; $('#delAsk').hidden = false; }
     else if (id === 'mDelNo') { $('#delWrap').hidden = false; $('#delAsk').hidden = true; }
     else if (id === 'mDelYes') deleteCita();
@@ -1866,6 +1915,14 @@ function bind() {
     if (M && M.kind === 'dashboard' && e.target.id === 'dfQ') { syncDashFiltersFromDOM(); renderDashboardStats(); }
   });
   ov.addEventListener('change', e => {
+    if (M && M.kind === 'cita' && e.target.dataset.f === 'estado') {
+      const opts = motivoOptsFor(e.target.value), wrap = $('#motivoWrap');
+      if (wrap) {
+        wrap.hidden = !opts;
+        wrap.innerHTML = opts ? `<span class="fl">${motivoLabelFor(e.target.value)}</span>${sel('motivoEstado', opts, (M.orig && M.orig.estado === e.target.value) ? (M.orig.motivoEstado || '') : '')}` : '';
+      }
+      colorSelects(); updateHint();
+    }
     if (M && M.kind === 'usuarios' && e.target.classList.contains('usel')) cambiarRolForm(e.target.dataset.uid, e.target.value);
     if (M && M.kind === 'dashboard' && ['dfDesde', 'dfHasta', 'dfTrans'].includes(e.target.id)) { syncDashFiltersFromDOM(); renderDashboardStats(); }
     if (M && M.kind === 'usuarios' && e.target.matches('.rtable input[type=checkbox][data-role]')) {
